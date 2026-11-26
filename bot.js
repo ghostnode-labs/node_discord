@@ -10,6 +10,13 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 
+// Notlösung, falls die Umgebung des Hosters nicht ankommt: KEY=WERT-Zeilen aus .env neben bot.js (nie ins Git, siehe .gitignore)
+try {
+    for (const line of fs.readFileSync(path.join(__dirname, '.env'), 'utf8').split(/\r?\n/)) {
+        const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/.exec(line);
+        if (m && !process.env[m[1]]) process.env[m[1]] = m[2].replace(/^(['"])(.*)\1$/, '$2');
+    }
+} catch (e) { /* keine .env */ }
 const env = (k, d = '') => String(process.env[k] || d).trim();
 const CFG = {
     token: env('DISCORD_TOKEN'), app: env('DISCORD_APP_ID'), guild: env('DISCORD_GUILD_ID'),
@@ -225,7 +232,17 @@ async function registerCommands() {
 }
 
 async function start() {
-    if (!CFG.token || !CFG.app) { console.error('DISCORD_TOKEN und DISCORD_APP_ID fehlen (Umgebungsvariablen).'); process.exit(1); }
+    const missing = ['DISCORD_TOKEN', 'DISCORD_APP_ID'].filter(k => !env(k));
+    if (missing.length) {
+        const msg = 'Es fehlen: ' + missing.join(', ') + ' (Umgebungsvariablen/Secrets der App – nach dem Speichern „App neu starten“; nicht über „Node.js-Befehle ausführen“ starten).';
+        console.error(msg);
+        const port = CFG.port || (process.env.IN_PASSENGER === '1' || typeof PhusionPassenger !== 'undefined' ? 3000 : 0);
+        if (!port) process.exit(1);
+        // unter Plesk nicht beenden, sondern anzeigen, was fehlt (nur Namen, nie Werte)
+        const seen = Object.keys(process.env).filter(k => /^(DISCORD_|DASHBOARD_|RELEASE_|NEXUS_|HYPERATE_|BOT_)/.test(k)).sort();
+        http.createServer((q, s) => { s.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' }); s.end(JSON.stringify({ ok: false, error: msg, variables_seen: seen, node: process.version }, null, 2)); }).listen(port);
+        return null;
+    }
     if (typeof WebSocket === 'undefined') { console.error('Node ≥ 22 nötig.'); process.exit(1); }
     await registerCommands().catch(e => log('Befehle nicht registriert:', e.message));
     const gw = new Gateway(); gw.connect();

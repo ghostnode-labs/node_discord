@@ -83,3 +83,9 @@ journalctl -u ghostnode-bot -f
    Then open `https://discord.ghostnode-labs.dev/health` – it shows `{"ok":true,…}` when the bot is connected; `/` is the dashboard.
 
 A root server with systemd (above) is still the most reliable place.
+
+## Troubleshooting
+
+- **„Es fehlen: DISCORD_TOKEN …“** – open `/health`: it lists which variable *names* the bot sees. Save the variables/secrets in *Node.js → Environment*, then **Restart App**. Do not start the bot via *Run Node.js commands* (`npm start` there gets no app environment). Last resort: a `.env` file next to `bot.js` with `KEY=value` lines (never commit it).
+- **Browser shows a certificate error** – issue a Let's Encrypt certificate for the subdomain.
+- **Bot goes offline after a few minutes** – add the two `passenger_…` nginx directives above.
