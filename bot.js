@@ -181,14 +181,14 @@ async function checkRelease() {
 
 // ---------------- Gateway ----------------
 class Gateway {
-    constructor() { this.ws = null; this.seq = null; this.session = ''; this.resumeUrl = ''; this.hb = null; this.acked = true; this.backoff = 1000; this.stopped = false; this.ready = false; }
+    constructor() { this.started = Date.now(); this.closes = 0; this.lastClose = null; this.readyAt = 0; this.ws = null; this.seq = null; this.session = ''; this.resumeUrl = ''; this.hb = null; this.acked = true; this.backoff = 1000; this.stopped = false; this.ready = false; }
     connect() {
         if (this.stopped) return;
         const url = (this.session && this.resumeUrl ? this.resumeUrl : CFG.gateway) + '/?v=10&encoding=json';
         const ws = this.ws = new WebSocket(url);
         ws.onmessage = ev => { let m; try { m = JSON.parse(String(ev.data)); } catch (e) { return; } this.onMessage(m).catch(e => log('Gateway-Fehler:', e.message)); };
         ws.onclose = ev => {
-            clearInterval(this.hb); this.ready = false;
+            clearInterval(this.hb); this.ready = false; this.closes++; this.lastClose = { code: ev.code, at: new Date().toISOString() };
             if (this.ws !== ws || this.stopped) return;
             if (ev.code === 4014 && INTENTS & (I.MEMBERS | I.CONTENT)) {   // privilegierte Intents nicht freigeschaltet → ohne weiter
                 log('⚠ „Server Members Intent“ / „Message Content Intent“ sind im Developer Portal nicht an – Begrüßung, Autorollen, AutoMod und !Befehle bleiben aus.');
@@ -218,7 +218,7 @@ class Gateway {
             case 7: try { this.ws.close(4000); } catch (e) { /* egal */ } return;   // Neu verbinden
             case 9: if (!m.d) { this.session = ''; this.seq = null; } setTimeout(() => { try { this.ws.close(4000); } catch (e) { /* egal */ } }, 1000 + Math.random() * 4000); return;
             case 0:
-                if (m.t === 'READY') { this.session = m.d.session_id; this.resumeUrl = m.d.resume_gateway_url || ''; this.ready = true; this.backoff = 1000; log('Bot bereit als', m.d.user && m.d.user.username); }
+                if (m.t === 'READY') { this.session = m.d.session_id; this.resumeUrl = m.d.resume_gateway_url || ''; this.ready = true; this.readyAt = Date.now(); this.backoff = 1000; log('Bot bereit als', m.d.user && m.d.user.username); }
                 else if (m.t === 'RESUMED') { this.ready = true; this.backoff = 1000; log('Verbindung wieder aufgenommen'); }
                 else if (m.t === 'INTERACTION_CREATE') await onInteraction(m.d);
                 else if (m.t === 'MESSAGE_CREATE') await F.onMessage(m.d);
@@ -261,7 +261,7 @@ async function start() {
     const port = CFG.port || (process.env.IN_PASSENGER === '1' || typeof PhusionPassenger !== 'undefined' ? 3000 : 0);
     if (port) {
         const dash = require('./dashboard').createDashboard({ CFG, rest, store, log, botGuilds });
-        http.createServer((q, s) => { if (q.url === '/health') { s.writeHead(200, { 'Content-Type': 'application/json' }); return s.end(JSON.stringify({ ok: gw.ready, service: 'ghostnode-discord-bot' })); }
+        http.createServer((q, s) => { if (q.url === '/health') { s.writeHead(200, { 'Content-Type': 'application/json' }); return s.end(JSON.stringify({ ok: gw.ready, service: 'ghostnode-discord-bot', version: require('./package.json').version, uptime_s: Math.round((Date.now() - gw.started) / 1000), connected_s: gw.ready ? Math.round((Date.now() - gw.readyAt) / 1000) : 0, reconnects: gw.closes, last_close: gw.lastClose, privileged_intents: !!(INTENTS & I.CONTENT), servers: botGuilds().length })); }
             dash.handle(q, s).catch(e => { log('Dashboard:', e.message); try { s.writeHead(500); s.end(); } catch (x) { /* schon gesendet */ } }); }).listen(port);
     }
     const bye = () => { gw.stop(); store.flushAll(); process.exit(0); };
