@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GhostNode Bot · Dashboard</title>
+<style>
+:root{--bg:#06080c;--panel:#0b1017;--panel2:#101722;--line:rgba(56,213,230,.22);--cyan:#38d5e6;--gold:#f3c262;--text:#e2e8f0;--muted:#8a97aa;--red:#ef4444;--green:#4ade80}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(1200px 600px at 10% -10%,rgba(56,213,230,.08),transparent),var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--cyan)}button,input,select,textarea{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;padding:10px 18px;background:rgba(6,8,12,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.brand{font-weight:800;letter-spacing:3px}.brand span{color:var(--cyan)}.brand b{color:var(--gold)}.sp{flex:1}
+.user{display:flex;align-items:center;gap:8px;font-size:.9rem}.user img{width:28px;height:28px;border-radius:50%}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:1px solid var(--line);background:var(--panel2);cursor:pointer;text-decoration:none;color:var(--text);border-radius:6px}
+.btn:hover{border-color:var(--cyan);color:var(--cyan)}.btn.gold{border-color:var(--gold);color:var(--gold)}.btn.red{border-color:var(--red);color:var(--red)}.btn.sm{padding:4px 10px;font-size:.85rem}
+main{max-width:1200px;margin:0 auto;padding:22px 18px 60px}
+.hero{text-align:center;padding:70px 10px}.hero h1{font-size:clamp(2rem,6vw,3.4rem);letter-spacing:5px;color:var(--gold);margin:.2em 0}
+.hero p{color:var(--muted);max-width:640px;margin:0 auto 26px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.gcard{display:flex;align-items:center;gap:12px;padding:14px;background:var(--panel);border:1px solid var(--line);border-radius:10px;cursor:pointer}.gcard:hover{border-color:var(--cyan)}
+.gicon{width:46px;height:46px;border-radius:12px;background:var(--panel2);display:grid;place-items:center;font-weight:700;overflow:hidden;flex:none}.gicon img{width:100%;height:100%}
+.layout{display:grid;grid-template-columns:220px 1fr;gap:18px}
+nav.side{display:flex;flex-direction:column;gap:4px;position:sticky;top:70px;align-self:start}
+nav.side button{text-align:left;padding:9px 12px;background:none;border:1px solid transparent;border-radius:6px;cursor:pointer;color:var(--muted)}
+nav.side button.on,nav.side button:hover{color:var(--cyan);border-color:var(--line);background:var(--panel)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px;margin-bottom:14px}
+.card h2{margin:0 0 4px;font-size:1.15rem}.card h3{margin:16px 0 6px;font-size:.95rem;color:var(--cyan)}.muted{color:var(--muted);font-size:.88rem}
+label.f{display:block;margin:10px 0}label.f>span{display:block;font-size:.82rem;color:var(--muted);margin-bottom:4px}
+input[type=text],input[type=number],select,textarea{width:100%;padding:8px 10px;background:var(--bg);border:1px solid var(--line);border-radius:6px}
+textarea{min-height:80px;resize:vertical}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>*{flex:1 1 180px}
+.sw{display:flex;align-items:center;gap:10px;margin:8px 0;cursor:pointer}.sw input{width:18px;height:18px;accent-color:var(--cyan)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;max-height:220px;overflow:auto;padding:6px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--line);border-radius:999px;font-size:.85rem;cursor:pointer;user-select:none}
+.chip.on{border-color:var(--cyan);background:rgba(56,213,230,.12)}.dot{width:9px;height:9px;border-radius:50%}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.stat{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:12px}.stat b{display:block;font-size:1.6rem;color:var(--gold)}.stat span{font-size:.78rem;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}th{color:var(--muted);font-weight:500}
+.save{position:sticky;bottom:12px;display:flex;justify-content:flex-end;margin-top:10px}
+.toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);padding:10px 16px;border-radius:8px;background:var(--panel2);border:1px solid var(--cyan);z-index:9}
+.toast.bad{border-color:var(--red)}.hint{font-size:.8rem;color:var(--muted)}
+@media(max-width:800px){.layout{grid-template-columns:1fr}nav.side{position:static;flex-direction:row;overflow:auto}nav.side button{white-space:nowrap}}
+</style>
+</head>
+<body>
+<header><div class="brand"><span>◈</span> GHOST<b>NODE</b> BOT</div><div class="sp"></div><div id="who"></div></header>
+<main id="app"><p class="muted">Lade …</p></main>
+<script>
+(() => {
+const $ = s => document.querySelector(s), app = $('#app');
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+let me = null, G = null, gid = '', tab = 'overview', dirty = {};
+const toast = (m, bad) => { const t = document.createElement('div'); t.className = 'toast' + (bad ? ' bad' : ''); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3200); };
+const api = (path, data) => fetch('/api' + path, data === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF': me.csrf }, body: JSON.stringify(data) })
+    .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || 'Fehler ' + r.status), { status: r.status, login: j.login }); return j; });
+const icon = g => g.icon ? '<img src="https://cdn.discordapp.com/icons/' + esc(g.id) + '/' + esc(g.icon) + '.png?size=96" alt="">' : esc((g.name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 3));
+const chSel = (k, v, none = '— aus —') => '<select data-k="' + k + '"><option value="">' + none + '</option>' + G.channels.map(c => '<option value="' + c.id + '"' + (c.id === v ? ' selected' : '') + '># ' + esc(c.name) + '</option>').join('') + '</select>';
+const roleChips = (k, list) => '<div class="chips" data-roles="' + k + '">' + G.roles.map(r => '<span class="chip' + (list.includes(r.id) ? ' on' : '') + '" data-id="' + r.id + '"><i class="dot" style="background:' + (r.color ? '#' + r.color.toString(16).padStart(6, '0') : '#8a97aa') + '"></i>' + esc(r.name) + '</span>').join('') + '</div>';
+const chChips = (k, list) => '<div class="chips" data-chans="' + k + '">' + G.channels.map(c => '<span class="chip' + (list.includes(c.id) ? ' on' : '') + '" data-id="' + c.id + '"># ' + esc(c.name) + '</span>').join('') + '</div>';
+const sw = (k, on, label) => '<label class="sw"><input type="checkbox" data-k="' + k + '"' + (on ? ' checked' : '') + '> ' + label + '</label>';
+const roleName = id => (G.roles.find(r => r.id === id) || { name: 'unbekannte Rolle' }).name;
+const saveBtn = '<div class="save"><button class="btn gold" data-save>💾 Speichern</button></div>';
+
+async function boot() {
+    try { me = await api('/me'); } catch (e) {
+        $('#who').innerHTML = '';
+        app.innerHTML = '<section class="hero"><div class="muted">GHOSTNODE · DISCORD</div><h1>GHOSTNODE BOT</h1><p>Levels, Begrüßung, Moderation, AutoMod, Rollen-Knöpfe, Umfragen, Giveaways, Tickets und mehr – hier stellst du alles für deinen Server ein.</p>'
+            + (e.login === false ? '<p class="muted">Das Dashboard ist noch nicht eingerichtet (DISCORD_CLIENT_SECRET / DASHBOARD_URL fehlen).</p>' : '<a class="btn gold" href="/login">Mit Discord anmelden</a>') + '</section>';
+        return;
+    }
+    $('#who').innerHTML = '<span class="user">' + (me.user.avatar ? '<img src="https://cdn.discordapp.com/avatars/' + esc(me.user.id) + '/' + esc(me.user.avatar) + '.png?size=64" alt="">' : '') + esc(me.user.name) + '</span> <a class="btn sm" href="/logout">Abmelden</a>';
+    const h = location.hash.slice(1).split('/');
+    if (h[0] && me.guilds.some(g => g.id === h[0] && g.bot)) return openGuild(h[0], h[1]);
+    pick();
+}
+function pick() {
+    gid = ''; G = null; location.hash = '';
+    const on = me.guilds.filter(g => g.bot), off = me.guilds.filter(g => !g.bot);
+    app.innerHTML = '<h2>Wähle einen Server</h2><p class="muted">Du siehst Server, auf denen du „Server verwalten“ darfst.</p><div class="grid">'
+        + on.map(g => '<div class="gcard" data-g="' + g.id + '"><div class="gicon">' + icon(g) + '</div><div><b>' + esc(g.name) + '</b><div class="muted">Einstellungen öffnen →</div></div></div>').join('') + '</div>'
+        + (off.length ? '<h3 style="margin-top:28px">Ohne GhostNode Bot</h3><div class="grid">' + off.map(g => '<a class="gcard" style="text-decoration:none;color:inherit" target="_blank" rel="noopener" href="' + esc(me.invite) + '&guild_id=' + g.id + '"><div class="gicon">' + icon(g) + '</div><div><b>' + esc(g.name) + '</b><div class="muted">Bot einladen ↗</div></div></a>').join('') + '</div>' : '')
+        + (!me.guilds.length ? '<p>Keine Server gefunden, auf denen du verwalten darfst.</p>' : '');
+}
+async function openGuild(id, t) {
+    gid = id; tab = t || 'overview'; app.innerHTML = '<p class="muted">Lade Server …</p>';
+    try { G = await api('/guild/' + id); } catch (e) { toast(e.message, true); return pick(); }
+    render();
+}
+const TABS = [['overview', '📊 Übersicht'], ['welcome', '👋 Willkommen'], ['levels', '📈 Levels'], ['leader', '🏆 Rangliste'], ['mod', '🛡 Moderation'], ['automod', '🤖 AutoMod'], ['roles', '🎭 Rollen & Tickets'], ['cmds', '💬 Befehle'], ['events', '🎁 Giveaways & Umfragen'], ['misc', '🎂 Sonstiges']];
+function render() {
+    location.hash = gid + '/' + tab; dirty = {};
+    const g = me.guilds.find(x => x.id === gid);
+    app.innerHTML = '<div class="row" style="margin-bottom:14px;flex-wrap:nowrap"><button class="btn sm" data-back style="flex:none">← Server</button><div class="gicon" style="width:36px;height:36px;flex:none">' + icon(g) + '</div><h2 style="margin:0;flex:1">' + esc(G.name || g.name) + '</h2></div>'
+        + '<div class="layout"><nav class="side">' + TABS.map(([k, l]) => '<button data-tab="' + k + '"' + (k === tab ? ' class="on"' : '') + '>' + l + '</button>').join('') + '</nav><div id="pane">' + pane() + '</div></div>';
+}
+function pane() {
+    const c = G.cfg, a = c.automod, s = G.stats;
+    switch (tab) {
+        case 'overview': return '<div class="card"><h2>Übersicht</h2><div class="stats">'
+            + [[G.members, 'Mitglieder'], [s.ranked, 'Mitglieder mit XP'], [s.messages, 'gezählte Nachrichten'], [s.warns, 'Verwarnungen'], [s.cmds, 'eigene Befehle'], [s.open_tickets, 'offene Tickets'], [s.birthdays, 'Geburtstage']].map(([n, l]) => '<div class="stat"><b>' + esc(n) + '</b><span>' + l + '</span></div>').join('') + '</div></div>'
+            + '<div class="card"><h2>Aktiv</h2><table>' + [['👋 Begrüßung', c.welcome_channel], ['📈 Levels', c.levels ? (c.level_channel || 'gleicher Kanal') : ''], ['🛡 Mod-Log', c.modlog_channel], ['📜 Logs', c.log_channel], ['🎂 Geburtstage', c.birthday_channel], ['🎫 Tickets', c.ticket_channel]]
+                .map(([l, v]) => '<tr><td>' + l + '</td><td>' + (v ? '✅ ' + esc(chName(v)) : '<span class="muted">aus</span>') + '</td></tr>').join('')
+            + '<tr><td>🤖 AutoMod</td><td>' + (['invites', 'links', 'spam', 'caps'].filter(k => a[k]).map(k => ({ invites: 'Einladungen', links: 'Links', spam: 'Spam', caps: 'Caps' })[k]).concat(a.words.length ? [a.words.length + ' Wörter'] : []).join(', ') || '<span class="muted">aus</span>') + '</td></tr></table></div>'
+            + '<div class="card"><h2>Top 5</h2>' + lb(G.leaderboard.slice(0, 5)) + '</div>';
+        case 'welcome': return '<div class="card"><h2>👋 Willkommen & Abschied</h2><p class="muted">Platzhalter: {user} (Erwähnung), {name}, {server}, {count}</p>'
+            + '<h3>Begrüßung</h3><label class="f"><span>Kanal</span>' + chSel('welcome_channel', c.welcome_channel) + '</label><label class="f"><span>Text</span><textarea data-k="welcome_text" maxlength="1000">' + esc(c.welcome_text) + '</textarea></label>'
+            + '<button class="btn sm" data-test="welcome">🧪 Test senden</button>'
+            + '<h3>Abschied</h3><label class="f"><span>Kanal</span>' + chSel('goodbye_channel', c.goodbye_channel) + '</label><label class="f"><span>Text</span><textarea data-k="goodbye_text" maxlength="1000">' + esc(c.goodbye_text) + '</textarea></label>'
+            + '<h3>Autorollen für neue Mitglieder</h3>' + roleChips('autoroles', c.autoroles) + '<p class="hint">Die Rolle des Bots muss über diesen Rollen stehen.</p></div>' + saveBtn;
+        case 'levels': return '<div class="card"><h2>📈 Levels</h2>' + sw('levels', c.levels, 'Level-System an')
+            + '<div class="row"><label class="f"><span>XP pro Nachricht (min.)</span><input type="number" data-k="xp_min" min="1" max="100" value="' + c.xp_min + '"></label><label class="f"><span>XP (max.)</span><input type="number" data-k="xp_max" min="1" max="200" value="' + c.xp_max + '"></label><label class="f"><span>Wartezeit (Sekunden)</span><input type="number" data-k="xp_cooldown" min="0" max="3600" value="' + c.xp_cooldown + '"></label></div>'
+            + '<label class="f"><span>Level-Up-Kanal</span>' + chSel('level_channel', c.level_channel, '— gleicher Kanal —') + '</label><label class="f"><span>Level-Up-Text ({user}, {name}, {level})</span><input type="text" data-k="level_text" maxlength="500" value="' + esc(c.level_text) + '"></label>'
+            + '<h3>Kanäle ohne XP</h3>' + chChips('xp_ignore_channels', c.xp_ignore_channels)
+            + '<h3>Belohnungen</h3><table id="rw">' + Object.entries(c.level_rewards).sort((x, y) => x[0] - y[0]).map(([lv, r]) => rwRow(lv, r)).join('') + '</table><button class="btn sm" data-addrw>＋ Belohnung</button></div>' + saveBtn;
+        case 'leader': return '<div class="card"><h2>🏆 Rangliste</h2>' + lb(G.leaderboard, true) + '<p style="margin-top:14px"><button class="btn sm red" data-xpall>Alle XP zurücksetzen</button></p></div>';
+        case 'mod': return '<div class="card"><h2>🛡 Moderation</h2><label class="f"><span>Mod-Log-Kanal (Verwarnungen, Kicks, Banns, AutoMod)</span>' + chSel('modlog_channel', c.modlog_channel) + '</label>'
+            + '<label class="f"><span>Log-Kanal (Beitritte, gelöschte/bearbeitete Nachrichten)</span>' + chSel('log_channel', c.log_channel) + '</label>' + saveBtn
+            + '<h3>Verwarnungen</h3>' + (G.warns.length ? '<table><tr><th>Mitglied</th><th>Anzahl</th><th>Zuletzt</th><th></th></tr>' + G.warns.map(w => '<tr><td>' + esc(w.id) + '</td><td>' + w.count + '</td><td>' + esc(new Date(w.last.at).toLocaleDateString('de-DE')) + ' – ' + esc(w.last.reason) + '</td><td><button class="btn sm" data-clearwarn="' + w.id + '">löschen</button></td></tr>').join('') + '</table>' : '<p class="muted">Keine Verwarnungen.</p>')
+            + '<p class="hint">Verwarnen, Timeout, Kick und Bann gehen in Discord mit /warn, /timeout, /kick, /ban.</p></div>';
+        case 'automod': return '<div class="card"><h2>🤖 AutoMod</h2>' + sw('am_invites', a.invites, 'Discord-Einladungen löschen') + sw('am_links', a.links, 'Alle Links löschen') + sw('am_spam', a.spam, 'Spam bremsen (6 Nachrichten in 5 s)') + sw('am_caps', a.caps, 'Nur-Großbuchstaben löschen')
+            + '<label class="f"><span>Verbotene Wörter (ganze Wörter, mit Komma getrennt)</span><textarea data-k="am_words">' + esc(a.words.join(', ')) + '</textarea></label>'
+            + '<label class="f"><span>Timeout bei Verstoß (Minuten, 0 = nur löschen)</span><input type="number" data-k="am_timeout" min="0" max="1440" value="' + a.timeout_min + '"></label>'
+            + '<h3>Ausgenommene Rollen</h3>' + roleChips('am_exempt', a.exempt_roles) + '</div>' + saveBtn;
+        case 'roles': return '<div class="card"><h2>🎭 Rollen-Knöpfe</h2><p class="muted">Rollenmenüs erstellst du in Discord mit <b>/rollenmenue</b> (bis zu 5 Rollen pro Menü).</p></div>'
+            + '<div class="card"><h2>🎫 Tickets</h2><label class="f"><span>Ticket-Kanal (Threads entstehen dort)</span>' + chSel('ticket_channel', c.ticket_channel) + '</label><h3>Team-Rollen (sehen und schließen Tickets)</h3>' + roleChips('ticket_roles', c.ticket_roles)
+            + '<p class="hint">Den Knopf „Ticket öffnen“ setzt du mit <b>/ticket-panel</b> in den gewünschten Kanal.</p></div>' + saveBtn;
+        case 'cmds': return '<div class="card"><h2>💬 Eigene Befehle</h2><p class="muted">Im Chat mit <b>!name</b> aufrufen. Platzhalter: {user}, {name}, {server}</p><table>'
+            + Object.entries(G.cmds).sort().map(([n, t]) => '<tr><td><b>!' + esc(n) + '</b></td><td>' + esc(t) + '</td><td style="white-space:nowrap"><button class="btn sm" data-editcmd="' + esc(n) + '">✎</button> <button class="btn sm red" data-delcmd="' + esc(n) + '">🗑</button></td></tr>').join('')
+            + '</table><h3>Neu / ändern</h3><div class="row"><label class="f" style="flex:0 1 200px"><span>Name</span><input type="text" id="cmdName" maxlength="30" placeholder="regeln"></label><label class="f"><span>Antwort</span><input type="text" id="cmdText" maxlength="1800" placeholder="Bitte lies #regeln, {user}!"></label></div><button class="btn gold" data-addcmd>Speichern</button></div>';
+        case 'events': return '<div class="card"><h2>🎁 Laufende Giveaways</h2>' + (G.giveaways.length ? '<table><tr><th>Preis</th><th>Endet</th><th>Teilnehmende</th><th>Gewinner</th></tr>' + G.giveaways.map(w => '<tr><td>' + esc(w.prize) + '</td><td>' + esc(new Date(w.end).toLocaleString('de-DE')) + '</td><td>' + w.entrants + '</td><td>' + w.winners + '</td></tr>').join('') + '</table>' : '<p class="muted">Keine. Starten mit <b>/giveaway</b>.</p>')
+            + '</div><div class="card"><h2>📊 Umfragen</h2>' + (G.polls.length ? '<table>' + G.polls.map(p => '<tr><td>' + esc(p.q) + '</td><td>' + p.votes + ' Stimmen</td></tr>').join('') + '</table>' : '<p class="muted">Keine. Starten mit <b>/umfrage</b>.</p>') + '</div>';
+        case 'misc': return '<div class="card"><h2>🎂 Geburtstage</h2><label class="f"><span>Kanal für Geburtstagsgrüße (täglich ab 9 Uhr)</span>' + chSel('birthday_channel', c.birthday_channel) + '</label><p class="hint">Mitglieder tragen sich mit /geburtstag ein.</p></div>' + saveBtn;
+    }
+    return '';
+}
+const chName = id => '#' + ((G.channels.find(c => c.id === id) || { name: 'unbekannt' }).name);
+const rwRow = (lv, r) => '<tr data-rw><td style="width:120px"><input type="number" min="1" max="500" value="' + esc(lv) + '" data-rwl></td><td><select data-rwr>' + G.roles.map(x => '<option value="' + x.id + '"' + (x.id === r ? ' selected' : '') + '>' + esc(x.name) + '</option>').join('') + '</select></td><td style="width:60px"><button class="btn sm red" data-delrw>🗑</button></td></tr>';
+const lb = (rows, ctl) => rows.length ? '<table><tr><th>#</th><th>Mitglied</th><th>Level</th><th>XP</th><th>Nachrichten</th>' + (ctl ? '<th></th>' : '') + '</tr>' + rows.map(r => '<tr><td>' + r.rank + '</td><td>' + esc(r.id) + '</td><td>' + r.level + '</td><td>' + r.xp + '</td><td>' + r.msgs + '</td>' + (ctl ? '<td><button class="btn sm" data-xpuser="' + r.id + '">zurücksetzen</button></td>' : '') + '</tr>').join('') + '</table>' : '<p class="muted">Noch keine XP gesammelt.</p>';
+
+function collect() {
+    const p = {}, pane = $('#pane'), am = {};
+    pane.querySelectorAll('[data-k]').forEach(el => {
+        const k = el.dataset.k, v = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
+        if (k.startsWith('am_')) { const kk = k.slice(3); if (kk === 'words') am.words = String(v).split(',').map(x => x.trim()).filter(Boolean); else if (kk === 'timeout') am.timeout_min = v; else am[kk] = v; }
+        else p[k] = v;
+    });
+    pane.querySelectorAll('[data-roles]').forEach(el => { const ids = [...el.querySelectorAll('.chip.on')].map(c => c.dataset.id); if (el.dataset.roles === 'am_exempt') am.exempt_roles = ids; else p[el.dataset.roles] = ids; });
+    pane.querySelectorAll('[data-chans]').forEach(el => { p[el.dataset.chans] = [...el.querySelectorAll('.chip.on')].map(c => c.dataset.id); });
+    if (pane.querySelector('#rw')) { p.level_rewards = {}; pane.querySelectorAll('[data-rw]').forEach(tr => { const l = tr.querySelector('[data-rwl]').value; if (l) p.level_rewards[l] = tr.querySelector('[data-rwr]').value; }); }
+    if (Object.keys(am).length) p.automod = am;
+    return p;
+}
+const reload = () => api('/guild/' + gid).then(g => { G = g; render(); });
+document.addEventListener('click', e => {
+    const t = e.target, q = s => t.closest(s);
+    if (q('[data-g]')) return openGuild(q('[data-g]').dataset.g);
+    if (q('[data-back]')) return pick();
+    if (q('[data-tab]')) { tab = q('[data-tab]').dataset.tab; return render(); }
+    if (q('.chip')) return q('.chip').classList.toggle('on');
+    if (q('[data-save]')) { const b = q('[data-save]'); b.disabled = true; return api('/guild/' + gid + '/cfg', collect()).then(r => { G.cfg = r.cfg; toast('✅ Gespeichert'); }).catch(er => toast('⚠ ' + er.message, true)).finally(() => { b.disabled = false; }); }
+    if (q('[data-addrw]')) { if (!G.roles.length) return toast('Keine Rollen vorhanden', true); return $('#rw').insertAdjacentHTML('beforeend', rwRow('', G.roles[0].id)); }
+    if (q('[data-delrw]')) return q('[data-rw]').remove();
+    if (q('[data-test]')) { const ch = $('[data-k=welcome_channel]').value; if (!ch) return toast('Erst einen Kanal wählen', true); return api('/guild/' + gid + '/test', { channel: ch, text: $('[data-k=welcome_text]').value.replace(/\{user\}/g, '@' + me.user.name).replace(/\{name\}/g, me.user.name).replace(/\{server\}/g, G.name).replace(/\{count\}/g, G.members) }).then(() => toast('🧪 Test gesendet')).catch(er => toast('⚠ ' + er.message, true)); }
+    if (q('[data-addcmd]')) return api('/guild/' + gid + '/cmd', { name: $('#cmdName').value, text: $('#cmdText').value }).then(r => { G.cmds = r.cmds; toast('✅ Befehl gespeichert'); render(); }).catch(er => toast('⚠ ' + er.message, true));
+    if (q('[data-editcmd]')) { const n = q('[data-editcmd]').dataset.editcmd; $('#cmdName').value = n; $('#cmdText').value = G.cmds[n]; return $('#cmdText').focus(); }
+    if (q('[data-delcmd]')) { const n = q('[data-delcmd]').dataset.delcmd; if (!confirm('!' + n + ' löschen?')) return; return api('/guild/' + gid + '/cmd', { name: n, remove: true }).then(r => { G.cmds = r.cmds; render(); }).catch(er => toast('⚠ ' + er.message, true)); }
+    if (q('[data-clearwarn]')) { if (!confirm('Alle Verwarnungen dieses Mitglieds löschen?')) return; return api('/guild/' + gid + '/warns', { user: q('[data-clearwarn]').dataset.clearwarn }).then(reload).catch(er => toast('⚠ ' + er.message, true)); }
+    if (q('[data-xpuser]')) { if (!confirm('XP dieses Mitglieds zurücksetzen?')) return; return api('/guild/' + gid + '/xp', { user: q('[data-xpuser]').dataset.xpuser }).then(reload).catch(er => toast('⚠ ' + er.message, true)); }
+    if (q('[data-xpall]')) { const c = prompt('Alle XP auf diesem Server löschen? Zum Bestätigen ZURÜCKSETZEN eintippen:'); if (c !== 'ZURÜCKSETZEN') return; return api('/guild/' + gid + '/xp', { all: true, confirm: c }).then(reload).catch(er => toast('⚠ ' + er.message, true)); }
+});
+window.addEventListener('hashchange', () => { const h = location.hash.slice(1).split('/'); if (h[0] && h[0] !== gid && me) openGuild(h[0], h[1]); });
+boot();
+})();
+</script>
+</body>
+</html>
