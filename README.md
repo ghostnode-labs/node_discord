@@ -36,6 +36,10 @@ Security: Discord OAuth2 with `state`, session cookie (`HttpOnly`, `Secure`, `Sa
 
 Setup: Developer Portal → *OAuth2* → **Redirects**: add `https://<your-bot-domain>/callback` · copy the **Client Secret**. Environment: `DISCORD_CLIENT_SECRET` (secret) and `DASHBOARD_URL=https://<your-bot-domain>`.
 
+## Download
+
+Every change on `main` is tested and published as a ZIP: **[latest release](https://github.com/ghostnode-labs/node_discord/releases/latest)** – direct link: `https://github.com/ghostnode-labs/node_discord/releases/latest/download/ghostnode-discord-bot.zip`. Unpack it into the bot's folder; `data/` and the secrets stay untouched.
+
 ## Setup
 
 1. Discord Developer Portal → *New Application* → **Bot** → reset/copy the token. Note the *Application ID*.

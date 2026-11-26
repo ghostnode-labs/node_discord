@@ -1,0 +1,48 @@
+name: Release (ZIP)
+
+# Bei jedem Push auf main: testen, ZIP bauen und als GitHub-Release v<version aus package.json> veröffentlichen.
+# Gleiche Version erneut gepusht → ZIP im bestehenden Release wird ersetzt. Neue Version → neues Release.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Tests
+        run: npm test
+      - name: ZIP bauen
+        id: zip
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          mkdir -p dist
+          zip -q -X dist/ghostnode-discord-bot.zip bot.js features.js store.js dashboard.js dashboard.html package.json README.md ghostnode-bot.service
+          cp dist/ghostnode-discord-bot.zip "dist/ghostnode-discord-bot-$VERSION.zip"
+          unzip -l dist/ghostnode-discord-bot.zip
+      - name: Release veröffentlichen
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.zip.outputs.version }}
+        run: |
+          TAG="v$VERSION"
+          NOTES="GhostNode Discord bot $VERSION – ZIP in den Ordner des Bots entpacken (data/ und Secrets bleiben erhalten). Commit: ${GITHUB_SHA::7}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/*.zip --clobber
+            gh release edit "$TAG" --notes "$NOTES"
+          else
+            gh release create "$TAG" dist/*.zip --title "GhostNode Bot $VERSION" --notes "$NOTES" --target "$GITHUB_SHA" --latest
+          fi
