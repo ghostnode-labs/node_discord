@@ -65,8 +65,10 @@ COMMANDS.push(...F.COMMANDS);
 const getJson = async (url, ms = 8000) => { const r = await fetch(url, { signal: AbortSignal.timeout(ms), headers: { 'User-Agent': 'ghostnode-bot' } }); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); };
 const tagVer = t => String(t || '').replace(/^vrc-nexus-/, '').replace(/^v/, '');
 
-async function latestRelease() {
-    const j = await getJson(CFG.github + '/repos/' + CFG.repo + '/releases/latest');
+const memo = new Map();   // kurzer Zwischenspeicher für externe Abfragen (GitHub, Marktplatz)
+async function cached(key, ms, fn) { const c = memo.get(key); if (c && Date.now() - c.at < ms) return c.v; const v = await fn(); memo.set(key, { v, at: Date.now() }); return v; }
+async function latestRelease(fresh) {
+    const j = fresh ? await getJson(CFG.github + '/repos/' + CFG.repo + '/releases/latest') : await cached('release', 300000, () => getJson(CFG.github + '/repos/' + CFG.repo + '/releases/latest'));
     return { tag: String(j.tag_name || ''), version: tagVer(j.tag_name), url: String(j.html_url || ''), date: String(j.published_at || ''), body: String(j.body || '') };
 }
 async function up(url) { try { const r = await fetch(url, { signal: AbortSignal.timeout(6000) }); return r.status < 500; } catch (e) { return false; } }
@@ -93,7 +95,7 @@ const HANDLERS = {
         return { embeds: [{ title: '🖼 ' + slug, url, color: COLOR, image: { url: url + '?t=' + Math.floor(Date.now() / 60000) } }] };
     },
     async marktplatz(o) {
-        const j = await getJson(CFG.nexus + '/market.php?api=index');
+        const j = await cached('market', 120000, () => getJson(CFG.nexus + '/market.php?api=index'));
         const idx = JSON.parse(j.index), q = String(o.suche || '').toLowerCase();
         const list = idx.plugins.filter(p => !q || (p.name + ' ' + p.description).toLowerCase().includes(q)).slice(0, 10);
         if (!list.length) return { content: q ? 'Kein Plugin zu „' + q + '“ gefunden.' : 'Im Marktplatz sind noch keine Plugins.', flags: 64 };
@@ -127,6 +129,19 @@ async function firstHeartRate(id, ms) {
     } catch (e) { return 0; } finally { clearTimeout(t); ctl.abort(); }
 }
 
+/** Antwort auf einen Slash-Befehl: ist sie in 1,5 s fertig, direkt (ein Schritt) – sonst „denkt nach …“ und später nachreichen */
+const errData = (name, e) => { log('Befehl', name, 'Fehler:', e.message); return { content: '⚠ ' + e.message.replace(/^Discord \S+ \S+: /, '') + ' – fehlen dem Bot Rechte oder steht seine Rolle zu tief?', flags: 64 }; };
+async function answer(it, name, run, eph) {
+    const cb = '/interactions/' + it.id + '/' + it.token + '/callback';
+    const fix = d => Object.assign({ allowed_mentions: { parse: [] } }, d, eph && d.flags === undefined ? { flags: 64 } : {});
+    const job = Promise.resolve().then(run).then(d => d, e => errData(name, e));
+    const quick = await Promise.race([job, new Promise(r => setTimeout(() => r(null), 1500))]);
+    if (quick) return rest('POST', cb, { type: 4, data: fix(quick) });
+    await rest('POST', cb, { type: 5, data: { flags: eph ? 64 : 0 } });
+    const d = fix(await job); delete d.flags;   // Sichtbarkeit steht nach dem Aufschieben fest
+    return rest('PATCH', '/webhooks/' + CFG.app + '/' + it.token + '/messages/@original', d);
+}
+
 async function onInteraction(it) {
     if (it.type === 3 && it.data) {   // Knöpfe
         let res;
@@ -140,19 +155,11 @@ async function onInteraction(it) {
     const opts = Object.fromEntries(raw.map(o => [o.name, o.value]));
     if (F.H[name]) {
         if (!it.guild_id) return rest('POST', '/interactions/' + it.id + '/' + it.token + '/callback', { type: 4, data: { content: 'Dieser Befehl geht nur auf Servern.', flags: 64 } });
-        await rest('POST', '/interactions/' + it.id + '/' + it.token + '/callback', { type: 5, data: { flags: F.EPH.has(name) ? 64 : 0 } });
-        let data;
-        try { data = await F.H[name](it, opts, it.data.resolved, subName); } catch (e) { log('Befehl', name, 'Fehler:', e.message); data = { content: '⚠ ' + e.message.replace(/^Discord \S+ \S+: /, '') + ' – fehlen dem Bot Rechte oder steht seine Rolle zu tief?' }; }
-        return rest('PATCH', '/webhooks/' + CFG.app + '/' + it.token + '/messages/@original', Object.assign({ allowed_mentions: { parse: [] } }, data));
+        return answer(it, name, () => F.H[name](it, opts, it.data.resolved, subName), F.EPH.has(name));
     }
     const h = HANDLERS[name];
-    const reply = data => rest('POST', '/interactions/' + it.id + '/' + it.token + '/callback', { type: 4, data: Object.assign({ allowed_mentions: { parse: [] } }, data) });
-    if (!h) return reply({ content: 'Unbekannter Befehl.', flags: 64 });
-    // länger dauernde Befehle: erst „denkt nach …“, dann Antwort nachreichen
-    await rest('POST', '/interactions/' + it.id + '/' + it.token + '/callback', { type: 5, data: { flags: ['hilfe'].includes(name) ? 64 : 0 } });
-    let data;
-    try { data = await h(opts); } catch (e) { log('Befehl', name, 'Fehler:', e.message); data = { content: '⚠ Gerade nicht möglich – bitte später nochmal.' }; }
-    await rest('PATCH', '/webhooks/' + CFG.app + '/' + it.token + '/messages/@original', Object.assign({ allowed_mentions: { parse: [] } }, data));
+    if (!h) return rest('POST', '/interactions/' + it.id + '/' + it.token + '/callback', { type: 4, data: { content: 'Unbekannter Befehl.', flags: 64 } });
+    return answer(it, name, () => h(opts), name === 'hilfe');
 }
 
 // ---------------- Release-Ankündigungen ----------------
@@ -160,7 +167,8 @@ const loadState = () => { try { return JSON.parse(fs.readFileSync(CFG.state, 'ut
 const saveState = s => { try { fs.writeFileSync(CFG.state, JSON.stringify(s)); } catch (e) { log('Status nicht speicherbar:', e.message); } };
 async function checkRelease() {
     if (!CFG.releaseChannel) return false;
-    const rel = await latestRelease();
+    const rel = await latestRelease(true);
+    memo.set('release', { v: null, at: 0 });
     const st = loadState();
     if (!rel.tag || st.lastRelease === rel.tag) return false;
     const first = !st.lastRelease;
