@@ -88,4 +88,4 @@ A root server with systemd (above) is still the most reliable place.
 
 - **„Es fehlen: DISCORD_TOKEN …“** – open `/health`: it lists which variable *names* the bot sees. Save the variables/secrets in *Node.js → Environment*, then **Restart App**. Do not start the bot via *Run Node.js commands* (`npm start` there gets no app environment). Last resort: a `.env` file next to `bot.js` with `KEY=value` lines (never commit it).
 - **Browser shows a certificate error** – issue a Let's Encrypt certificate for the subdomain.
-- **Bot goes offline after a few minutes** – add the two `passenger_…` nginx directives above.
+- **Bot goes offline after a few minutes / is slow** – Plesk stops idle apps. With `DASHBOARD_URL` set, the bot pings its own `/health` every minute through the public address and stays awake (disable with `KEEPALIVE=0`). If your hoster allows custom nginx directives, the two `passenger_…` lines above are the cleaner fix; a Plesk *Scheduled task → Fetch URL* every minute also works.

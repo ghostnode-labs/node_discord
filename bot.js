@@ -257,11 +257,17 @@ async function start() {
     const rel = () => checkRelease().catch(e => log('Release-Prüfung:', e.message));
     setTimeout(rel, 15000); setInterval(rel, 10 * 60000);
     setInterval(() => F.tick().catch(e => log('Zeitsteuerung:', e.message)), 30000);
+    // Plesk/Passenger beendet Apps ohne Besuch nach einigen Minuten – sich selbst über die öffentliche Adresse wach halten
+    const selfUrl = env('KEEPALIVE_URL', env('DASHBOARD_URL') ? env('DASHBOARD_URL').replace(/\/+$/, '') + '/health?keepalive=1' : '');
+    if (selfUrl && (process.env.IN_PASSENGER === '1' || typeof PhusionPassenger !== 'undefined') && env('KEEPALIVE', '1') !== '0') {
+        setInterval(() => fetch(selfUrl, { signal: AbortSignal.timeout(15000), headers: { 'User-Agent': 'ghostnode-bot-keepalive' } }).catch(() => {}), 60000);
+        log('Wachhalten aktiv:', selfUrl);
+    }
     // Web-Dashboard + /health (Plesk/Passenger erwartet ohnehin einen HTTP-Dienst – dort immer lauschen)
     const port = CFG.port || (process.env.IN_PASSENGER === '1' || typeof PhusionPassenger !== 'undefined' ? 3000 : 0);
     if (port) {
         const dash = require('./dashboard').createDashboard({ CFG, rest, store, log, botGuilds });
-        http.createServer((q, s) => { if (q.url === '/health') { s.writeHead(200, { 'Content-Type': 'application/json' }); return s.end(JSON.stringify({ ok: gw.ready, service: 'ghostnode-discord-bot', version: require('./package.json').version, uptime_s: Math.round((Date.now() - gw.started) / 1000), connected_s: gw.ready ? Math.round((Date.now() - gw.readyAt) / 1000) : 0, reconnects: gw.closes, last_close: gw.lastClose, privileged_intents: !!(INTENTS & I.CONTENT), servers: botGuilds().length })); }
+        http.createServer((q, s) => { if (q.url === '/health' || q.url.startsWith('/health?')) { s.writeHead(200, { 'Content-Type': 'application/json' }); return s.end(JSON.stringify({ ok: gw.ready, service: 'ghostnode-discord-bot', version: require('./package.json').version, uptime_s: Math.round((Date.now() - gw.started) / 1000), connected_s: gw.ready ? Math.round((Date.now() - gw.readyAt) / 1000) : 0, reconnects: gw.closes, last_close: gw.lastClose, privileged_intents: !!(INTENTS & I.CONTENT), servers: botGuilds().length })); }
             dash.handle(q, s).catch(e => { log('Dashboard:', e.message); try { s.writeHead(500); s.end(); } catch (x) { /* schon gesendet */ } }); }).listen(port);
     }
     const bye = () => { gw.stop(); store.flushAll(); process.exit(0); };
