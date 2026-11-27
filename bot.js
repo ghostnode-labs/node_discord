@@ -66,10 +66,10 @@ COMMANDS.push(...F.COMMANDS);
 const C = require('./clubs').create({ rest: (...a) => rest(...a), log: (...a) => log(...a), store, nexus: CFG.nexus });
 COMMANDS.push(...C.COMMANDS); Object.assign(F.H, C.H); F.EPH.add('club');
 const getJson = async (url, ms = 8000) => { const r = await fetch(url, { signal: AbortSignal.timeout(ms), headers: { 'User-Agent': 'ghostnode-bot' } }); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); };
-/** Versionsnummer aus dem Tag – ab VRC Nexus „10“ als Datum angezeigt (intern 2026.1127.1 → v20261127.1) */
+/** Versionsnummer aus dem Tag – ab VRC Nexus „10“ als Datum angezeigt (intern 2026.1127.1 → v2026.11.27.1) */
 const tagVer = t => {
     const v = String(t || '').replace(/^vrc-nexus-/, '').replace(/^v/, ''), m = /^(20\d\d)\.([1-9]\d{2,3})\.([1-9]\d?)$/.exec(v);
-    return m ? 'v' + m[1] + String(Math.floor(m[2] / 100)).padStart(2, '0') + String(m[2] % 100).padStart(2, '0') + '.' + m[3] : v;
+    return m ? 'v' + m[1] + '.' + String(Math.floor(m[2] / 100)).padStart(2, '0') + '.' + String(m[2] % 100).padStart(2, '0') + '.' + m[3] : v;
 };
 
 const memo = new Map();   // kurzer Zwischenspeicher für externe Abfragen (GitHub, Marktplatz)
