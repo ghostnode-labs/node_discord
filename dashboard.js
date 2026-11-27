@@ -87,6 +87,7 @@ function createDashboard({ CFG, rest, store, log, botGuilds, oauthFetch }) {
                 birthdays: Object.keys(d.bdays).length, open_tickets: Object.values(d.tickets).filter(t => !t.closed).length },
             warns: Object.entries(d.warns).map(([id, l]) => ({ id, count: l.length, last: l[l.length - 1] })).sort((a, b) => b.last.at - a.last.at).slice(0, 100),
             giveaways: Object.entries(d.giveaways).filter(([, w]) => !w.done && w.end > now).map(([id, w]) => ({ id, prize: w.prize, end: w.end, entrants: w.entrants.length, winners: w.winners })),
+            clubs: Object.entries(d.clubs || {}).map(([slug, c]) => ({ slug, name: c.name || slug, channel: c.channel, role: c.role || '', remind: c.remind, last: c.last || 0, err: c.err || '' })),
             polls: Object.entries(d.polls).slice(-20).map(([id, p]) => ({ id, q: p.q, votes: Object.keys(p.votes).length })),
         };
     }

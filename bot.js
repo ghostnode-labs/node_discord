@@ -62,6 +62,9 @@ const store = new Store(CFG.data);
 const botGuilds = () => store.guilds().filter(g => { const m = store.get(g).meta; return m.name && !m.left; });
 const F = require('./features').create({ rest: (...a) => rest(...a), log: (...a) => log(...a), store });
 COMMANDS.push(...F.COMMANDS);
+// Club-Abgleich mit VRC Nexus (Events & Erinnerungen)
+const C = require('./clubs').create({ rest: (...a) => rest(...a), log: (...a) => log(...a), store, nexus: CFG.nexus });
+COMMANDS.push(...C.COMMANDS); Object.assign(F.H, C.H); F.EPH.add('club');
 const getJson = async (url, ms = 8000) => { const r = await fetch(url, { signal: AbortSignal.timeout(ms), headers: { 'User-Agent': 'ghostnode-bot' } }); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); };
 const tagVer = t => String(t || '').replace(/^vrc-nexus-/, '').replace(/^v/, '');
 
@@ -257,6 +260,7 @@ async function start() {
     const rel = () => checkRelease().catch(e => log('Release-Prüfung:', e.message));
     setTimeout(rel, 15000); setInterval(rel, 10 * 60000);
     setInterval(() => F.tick().catch(e => log('Zeitsteuerung:', e.message)), 30000);
+    setInterval(() => C.tick().catch(e => log('Club-Abgleich:', e.message)), 60000);
     // Plesk/Passenger beendet Apps ohne Besuch nach einigen Minuten – sich selbst über die öffentliche Adresse wach halten
     const selfUrl = env('KEEPALIVE_URL', env('DASHBOARD_URL') ? env('DASHBOARD_URL').replace(/\/+$/, '') + '/health?keepalive=1' : '');
     if (selfUrl && (process.env.IN_PASSENGER === '1' || typeof PhusionPassenger !== 'undefined') && env('KEEPALIVE', '1') !== '0') {
@@ -276,4 +280,4 @@ async function start() {
 }
 
 if (process.env.BOT_NO_AUTOSTART !== '1') start();
-module.exports = { CFG, COMMANDS, HANDLERS, F, store, botGuilds, Gateway, onInteraction, checkRelease, registerCommands, firstHeartRate, start };
+module.exports = { CFG, COMMANDS, HANDLERS, F, C, store, botGuilds, Gateway, onInteraction, checkRelease, registerCommands, firstHeartRate, start };

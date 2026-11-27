@@ -2,7 +2,7 @@
 
 Community bot for the GhostNode Discord (Node.js ≥ 22, **no npm packages**) with a **web dashboard**. Talks to the Discord gateway and REST API itself; data is stored per server in `data/<server-id>.json`.
 
-Files: `bot.js` (gateway, REST, VRC Nexus commands), `features.js` (community features), `store.js` (storage), `dashboard.js` + `dashboard.html` (web dashboard), `test/` (`npm test`, no dependencies).
+Files: `bot.js` (gateway, REST, VRC Nexus commands), `features.js` (community features), `clubs.js` (VRC Nexus club sync), `store.js` (storage), `dashboard.js` + `dashboard.html` (web dashboard), `test/` (`npm test`, no dependencies).
 
 | Area | Commands / behaviour |
 |---|---|
@@ -17,6 +17,7 @@ Files: `bot.js` (gateway, REST, VRC Nexus commands), `features.js` (community fe
 | 🎂 Birthdays | `/geburtstag 24.12` – greeting once a day from 9:00 |
 | 🎫 Tickets | `/ticket-panel` – button opens a private thread for member + team; close button |
 | 📜 Logs | joins/leaves, deleted and edited messages |
+| 🏠 Nexus clubs | `/club verbinden <club> <channel> [role] [reminder]` – posts new public events of a VRC Nexus club, a reminder before the start (5 min – 1 day) and cancellations; `/club liste`, `/club jetzt`, `/club trennen`. Up to 5 clubs per server, read-only feed `nexusclubs.php?discord=<club>` (members-only events are never posted), polled every 10 min and every minute shortly before an event. Already planned events are not reposted when connecting. |
 | 🥽 VRC Nexus | `/status`, `/release`, `/poster`, `/marktplatz`, `/puls`, automatic release posts |
 | 🎲 Fun | `/wuerfel`, `/muenze`, `/hilfe` |
 
