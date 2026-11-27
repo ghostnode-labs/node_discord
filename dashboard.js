@@ -5,6 +5,9 @@
  *  - Sichtbar sind nur Server, auf denen der Bot ist und die angemeldete Person „Server verwalten“ (oder Admin/Inhaber) hat
  *  - Alle Kanal-/Rollen-IDs werden gegen die echten Listen des Servers geprüft
  * Umgebung: DISCORD_CLIENT_SECRET (Secret), DASHBOARD_URL (z. B. https://discord.ghostnode-labs.dev)
+ * 2.4: Anmeldung über das GhostNode-Dashboard (BOT_SSO_SECRET): die Webseite (botdash.php) schickt ein signiertes Ticket
+ *  (HMAC-SHA256, 60 s, nur einmal) mit der verknüpften Discord-ID; welche Server die Person verwalten darf, prüft der Bot
+ *  selbst mit seinem Token (Inhaber, Administrator oder „Server verwalten“). Kein OAuth2-Redirect bei Discord nötig.
  */
 const crypto = require('crypto');
 const fs = require('fs');
@@ -19,6 +22,13 @@ function createDashboard({ CFG, rest, store, log, botGuilds, oauthFetch }) {
     const sessions = new Map(), states = new Map(), cache = new Map();
     const secret = String(process.env.DISCORD_CLIENT_SECRET || '').trim();
     const base = String(process.env.DASHBOARD_URL || '').replace(/\/+$/, '');
+    const ssoSecret = String(process.env.BOT_SSO_SECRET || '').trim();
+    const sso = ssoSecret.length >= 32, used = new Map();
+    const site = String(CFG.nexus || process.env.NEXUS_BASE || 'https://ghostnode-labs.dev').replace(/\/+$/, '');
+    const loginReady = () => sso || !!(secret && base);
+    // Secure-Cookies nur über https (hinter nginx: X-Forwarded-Proto) – sonst speichert der Browser sie über http://IP:Port nicht
+    const https = req => String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim() === 'https' || !!(req.socket && req.socket.encrypted) || (!req.headers['x-forwarded-proto'] && base.startsWith('https://') && String(req.headers.host || '') === new URL(base).host);
+    const sec = req => (https(req) ? '; Secure' : '');
     const ofetch = oauthFetch || ((u, o) => fetch(u, o));
     const html = fs.readFileSync(path.join(__dirname, 'dashboard.html'), 'utf8');
 
@@ -92,17 +102,64 @@ function createDashboard({ CFG, rest, store, log, botGuilds, oauthFetch }) {
         };
     }
 
+    // ---------- Anmeldung über das GhostNode-Dashboard ----------
+    const b64 = s => Buffer.from(s, 'base64url');
+    /** Ticket prüfen: „<payload>.<sig>“, payload = base64url(JSON {v,d,n,a,e,j}) */
+    function ticket(t) {
+        const m = /^([A-Za-z0-9_-]{10,2000})\.([A-Za-z0-9_-]{43})$/.exec(String(t || ''));
+        if (!m) throw new Error('Ticket ungültig');
+        const want = crypto.createHmac('sha256', ssoSecret).update(m[1]).digest(), got = b64(m[2]);
+        if (got.length !== want.length || !crypto.timingSafeEqual(got, want)) throw new Error('Signatur falsch (BOT_SSO_SECRET auf Webseite und Bot gleich?)');
+        let d; try { d = JSON.parse(b64(m[1]).toString('utf8')); } catch (e) { throw new Error('Ticket ungültig'); }
+        const now = Math.floor(Date.now() / 1000);
+        if (!d || d.v !== 1 || !/^\d{15,22}$/.test(String(d.d)) || !/^[0-9a-f]{32}$/.test(String(d.j))) throw new Error('Ticket ungültig');
+        if (!(d.e > now && d.e <= now + 120)) throw new Error('Ticket abgelaufen – bitte im GhostNode-Dashboard erneut öffnen');
+        for (const [k, t2] of used) if (t2 < now) used.delete(k);
+        if (used.has(d.j)) throw new Error('Ticket schon benutzt');
+        used.set(d.j, d.e);
+        return d;
+    }
+    /** Server, auf denen der Bot ist und die Person Inhaber ist, Administrator oder „Server verwalten“ hat – geprüft mit dem Bot-Token */
+    async function manageable(uid) {
+        const out = [];
+        await Promise.all(botGuilds().slice(0, 100).map(async gid => {
+            try {
+                const [g, mem] = await Promise.all([rest('GET', '/guilds/' + gid), rest('GET', '/guilds/' + gid + '/members/' + uid)]);
+                if (!g || !mem) return;
+                let perm = 0n;
+                const roles = new Map((g.roles || []).map(r => [r.id, BigInt(r.permissions || 0)]));
+                perm |= roles.get(gid) || 0n;   // @everyone
+                for (const r of mem.roles || []) perm |= roles.get(r) || 0n;
+                if (g.owner_id === uid || (perm & ADMIN) === ADMIN || (perm & MANAGE) === MANAGE) out.push({ id: gid, name: g.name, icon: g.icon || null });
+            } catch (e) { /* nicht Mitglied oder kein Zugriff */ }
+        }));
+        return out.sort((a, b) => a.name.localeCompare(b.name));
+    }
+    async function ssoLogin(req, res, t) {
+        if (!sso) return send(res, 404, 'Anmeldung über GhostNode ist nicht eingerichtet (BOT_SSO_SECRET fehlt).', 'text/plain; charset=utf-8');
+        let d;
+        try { d = ticket(t); } catch (e) { log('Dashboard-SSO:', e.message); return send(res, 400, e.message + '.', 'text/plain; charset=utf-8'); }
+        const uid = String(d.d), guilds = await manageable(uid);
+        const sid = crypto.randomBytes(32).toString('hex');
+        sessions.set(sid, { user: { id: uid, name: String(d.n || 'GhostNode').slice(0, 64), avatar: /^(a_)?[0-9a-f]{32}$/.test(String(d.a || '')) ? d.a : null },
+            guilds, via: 'ghostnode', csrf: crypto.randomBytes(16).toString('hex'), exp: Date.now() + SESSION_MS });
+        log('Dashboard-Anmeldung über GhostNode:', uid, '·', guilds.length, 'Server');
+        res.writeHead(302, { Location: '/', 'Set-Cookie': 'gnsid=' + sid + '; Path=/; HttpOnly' + sec(req) + '; SameSite=Lax; Max-Age=' + SESSION_MS / 1000 }); return res.end();
+    }
+
     // ---------- HTTP ----------
     async function handle(req, res) {
         const u = new URL(req.url, 'http://x'), p = u.pathname;
         if (p === '/health') return send(res, 200, { ok: true, service: 'ghostnode-discord-bot' });
         if (p === '/' || p === '/index.html') return send(res, 200, html, 'text/html; charset=utf-8');
+        if (p === '/login' && sso) { res.writeHead(302, { Location: site + '/botdash.php?go=1' }); return res.end(); }
+        if (p === '/sso') return ssoLogin(req, res, u.searchParams.get('t') || '');
         if (p === '/login') {
             if (!secret || !base) return send(res, 503, 'Dashboard nicht eingerichtet: DISCORD_CLIENT_SECRET und DASHBOARD_URL fehlen.', 'text/plain; charset=utf-8');
             const st = crypto.randomBytes(16).toString('hex'); states.set(st, Date.now());
             for (const [k, t] of states) if (Date.now() - t > 600000) states.delete(k);
             const q = new URLSearchParams({ client_id: CFG.app, response_type: 'code', scope: 'identify guilds', redirect_uri: base + '/callback', state: st, prompt: 'none' });
-            res.writeHead(302, { Location: 'https://discord.com/oauth2/authorize?' + q, 'Set-Cookie': 'gnst=' + st + '; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600' }); return res.end();
+            res.writeHead(302, { Location: 'https://discord.com/oauth2/authorize?' + q, 'Set-Cookie': 'gnst=' + st + '; Path=/; HttpOnly' + sec(req) + '; SameSite=Lax; Max-Age=600' }); return res.end();
         }
         if (p === '/callback') {
             const st = u.searchParams.get('state') || '', code = u.searchParams.get('code') || '';
@@ -120,14 +177,14 @@ function createDashboard({ CFG, rest, store, log, botGuilds, oauthFetch }) {
                 sessions.set(sid, { user: { id: me.id, name: me.global_name || me.username, avatar: me.avatar }, guilds: guilds.filter(canManage).map(g => ({ id: g.id, name: g.name, icon: g.icon })),
                     csrf: crypto.randomBytes(16).toString('hex'), exp: Date.now() + SESSION_MS });
                 log('Dashboard-Anmeldung:', me.username);
-                res.writeHead(302, { Location: '/', 'Set-Cookie': ['gnsid=' + sid + '; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=' + SESSION_MS / 1000, 'gnst=; Path=/; Max-Age=0'] }); return res.end();
+                res.writeHead(302, { Location: '/', 'Set-Cookie': ['gnsid=' + sid + '; Path=/; HttpOnly' + sec(req) + '; SameSite=Lax; Max-Age=' + SESSION_MS / 1000, 'gnst=; Path=/; Max-Age=0'] }); return res.end();
             } catch (e) { log('Dashboard-Login:', e.message); return send(res, 502, 'Anmeldung bei Discord fehlgeschlagen.', 'text/plain; charset=utf-8'); }
         }
         if (p === '/logout') { sessions.delete(cookies(req).gnsid || ''); res.writeHead(302, { Location: '/', 'Set-Cookie': 'gnsid=; Path=/; Max-Age=0' }); return res.end(); }
 
         if (!p.startsWith('/api/')) return send(res, 404, { error: 'Nicht gefunden' });
         const s = session(req);
-        if (!s) return send(res, 401, { error: 'Bitte anmelden.', login: !!(secret && base) });
+        if (!s) return send(res, 401, { error: 'Bitte anmelden.', login: loginReady(), via: sso ? 'ghostnode' : 'discord' });
         const inBot = new Set(botGuilds());
         if (p === '/api/me') return send(res, 200, { user: s.user, csrf: s.csrf, guilds: s.guilds.map(g => Object.assign({ bot: inBot.has(g.id) }, g)), invite: 'https://discord.com/oauth2/authorize?client_id=' + CFG.app + '&scope=bot+applications.commands&permissions=1460557409286' });
         const m = /^\/api\/guild\/(\d{15,22})(?:\/(\w+))?$/.exec(p);

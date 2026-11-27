@@ -41,7 +41,7 @@ test('Dashboard – Discord-Login (state), nur verwaltbare Server mit Bot, CSRF,
         assert.strictEqual((await go('/callback?code=c&state=falsch', { headers: { cookie: 'gnst=falsch' } })).status, 400);
         assert.strictEqual((await go('/callback?code=c&state=' + st, { headers: { cookie: 'gnst=anderer' } })).status, 400, 'state muss zum Cookie passen');
         r = await go('/login'); const st2 = new URL(r.headers.get('location')).searchParams.get('state');
-        r = await go('/callback?code=abc&state=' + st2, { headers: { cookie: 'gnst=' + st2 } });
+        r = await go('/callback?code=abc&state=' + st2, { headers: { cookie: 'gnst=' + st2, 'x-forwarded-proto': 'https' } });
         assert.strictEqual(r.status, 302);
         assert.match(tokenBody, /client_secret=test-secret/); assert.match(tokenBody, /code=abc/);
         const sc = r.headers.get('set-cookie'); assert.match(sc, /gnsid=[0-9a-f]{64}; Path=\/; HttpOnly; Secure; SameSite=Lax/);
@@ -76,4 +76,50 @@ test('Dashboard – Discord-Login (state), nur verwaltbare Server mit Bot, CSRF,
         await go('/logout', { headers: { cookie } });
         assert.strictEqual((await go('/api/me', { headers: { cookie } })).status, 401);
     } finally { srv.close(); delete process.env.DISCORD_CLIENT_SECRET; delete process.env.DASHBOARD_URL; }
+});
+
+test('Dashboard – Anmeldung über das GhostNode-Dashboard (signiertes Ticket, einmalig, Rechte per Bot-Token, Cookies ohne Secure über http)', async () => {
+    const crypto = require('crypto');
+    const SECRET = 'x'.repeat(48);
+    process.env.BOT_SSO_SECRET = SECRET; delete process.env.DISCORD_CLIENT_SECRET; delete process.env.DASHBOARD_URL;
+    const store = new Store(fs.mkdtempSync(path.join(os.tmpdir(), 'gn-sso-')));
+    const G = '111111111111111111', G2 = '222222222222222222', G3 = '333333333333333333', U = '700000000000000001';
+    const MOD = '600000000000000001';
+    const guilds = {
+        [G]: { id: G, name: 'GhostNode', owner_id: '1', roles: [{ id: G, permissions: '0' }, { id: MOD, permissions: String(1n << 5n) }] },   // Rolle mit „Server verwalten“
+        [G2]: { id: G2, name: 'Fremd', owner_id: '1', roles: [{ id: G2, permissions: '0' }] },                                               // Mitglied ohne Rechte
+        [G3]: { id: G3, name: 'Ohne Mitglied', owner_id: '1', roles: [{ id: G3, permissions: '8' }] },
+    };
+    const rest = async (m, route) => {
+        let x = /^\/guilds\/(\d+)$/.exec(route); if (x) return guilds[x[1]];
+        x = /^\/guilds\/(\d+)\/members\/(\d+)$/.exec(route);
+        if (x) { if (x[1] === G) return { roles: [MOD] }; if (x[1] === G2) return { roles: [] }; throw new Error('Discord GET: HTTP 404'); }
+        if (route.endsWith('/channels')) return []; if (route.endsWith('/roles')) return [];
+        return {};
+    };
+    const dash = createDashboard({ CFG: { app: '123', api: 'https://discord.com/api/v10', nexus: 'https://site.example' }, rest, store, log: () => {}, botGuilds: () => [G, G2, G3] });
+    const srv = http.createServer((q, s) => dash.handle(q, s)); await new Promise(r => srv.listen(0, '127.0.0.1', r));
+    const B = 'http://127.0.0.1:' + srv.address().port;
+    const go = (p, o = {}) => fetch(B + p, Object.assign({ redirect: 'manual' }, o));
+    const mk = (o, key = SECRET) => { const p = Buffer.from(JSON.stringify(Object.assign({ v: 1, d: U, n: 'Luna', a: null, e: Math.floor(Date.now() / 1000) + 60, j: crypto.randomBytes(16).toString('hex') }, o))).toString('base64url');
+        return p + '.' + crypto.createHmac('sha256', key).update(p).digest('base64url'); };
+    try {
+        const un = await (await go('/api/me')).json(); assert.ok(un.login === true && un.via === 'ghostnode');
+        let r = await go('/login'); assert.strictEqual(r.status, 302); assert.strictEqual(r.headers.get('location'), 'https://site.example/botdash.php?go=1', 'Login führt zur Webseite');
+        assert.strictEqual((await go('/sso?t=' + mk({}, 'y'.repeat(48)))).status, 400, 'falscher Schlüssel');
+        assert.strictEqual((await go('/sso?t=' + mk({ e: Math.floor(Date.now() / 1000) - 1 }))).status, 400, 'abgelaufen');
+        assert.strictEqual((await go('/sso?t=' + mk({ e: Math.floor(Date.now() / 1000) + 3600 }))).status, 400, 'zu lange gültig');
+        assert.strictEqual((await go('/sso?t=' + mk({ d: 'abc' }))).status, 400, 'keine Discord-ID');
+        assert.strictEqual((await go('/sso?t=kaputt')).status, 400);
+        const t = mk({});
+        r = await go('/sso?t=' + t); assert.strictEqual(r.status, 302);
+        const sc = r.headers.get('set-cookie'); assert.match(sc, /gnsid=[0-9a-f]{64}; Path=\/; HttpOnly; SameSite=Lax/); assert.doesNotMatch(sc, /Secure/, 'über http ohne Secure');
+        assert.strictEqual((await go('/sso?t=' + t)).status, 400, 'Ticket nur einmal');
+        const cookie = 'gnsid=' + /gnsid=([0-9a-f]+)/.exec(sc)[1];
+        const me = await (await go('/api/me', { headers: { cookie } })).json();
+        assert.strictEqual(me.user.id, U); assert.deepStrictEqual(me.guilds.map(g => g.id), [G], 'nur Server mit „Server verwalten“');
+        assert.strictEqual((await go('/api/guild/' + G2, { headers: { cookie } })).status, 403);
+        assert.strictEqual((await go('/api/guild/' + G, { headers: { cookie } })).status, 200);
+        r = await go('/sso?t=' + mk({}), { headers: { 'x-forwarded-proto': 'https' } }); assert.match(r.headers.get('set-cookie'), /; Secure;/, 'hinter https mit Secure');
+    } finally { srv.close(); delete process.env.BOT_SSO_SECRET; }
 });

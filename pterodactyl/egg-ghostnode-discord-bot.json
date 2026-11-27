@@ -69,7 +69,17 @@
             "field_type": "text"
         },
         {
-            "name": "OAuth2-Client-Secret (Dashboard)",
+            "name": "Schlüssel GhostNode-Anmeldung",
+            "description": "Für „Bot-Dashboard öffnen“ auf ghostnode-labs.dev/botdash.php (Anmeldung mit dem GhostNode-Konto, ohne Discord-Redirect). Wert aus der Webseite (Admin-Bereich auf botdash.php). Geheim halten.",
+            "env_variable": "BOT_SSO_SECRET",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|min:32|max:200",
+            "field_type": "text"
+        },
+        {
+            "name": "OAuth2-Client-Secret (nur ohne GhostNode-Anmeldung)",
             "description": "Discord-Portal → OAuth2 → Client Secret. Dort als Redirect <Dashboard-Adresse>/callback eintragen. Geheim halten.",
             "env_variable": "DISCORD_CLIENT_SECRET",
             "default_value": "",

@@ -51,7 +51,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&a
 let me = null, G = null, gid = '', tab = 'overview', dirty = {};
 const toast = (m, bad) => { const t = document.createElement('div'); t.className = 'toast' + (bad ? ' bad' : ''); t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3200); };
 const api = (path, data) => fetch('/api' + path, data === undefined ? { credentials: 'same-origin' } : { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-CSRF': me.csrf }, body: JSON.stringify(data) })
-    .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || 'Fehler ' + r.status), { status: r.status, login: j.login }); return j; });
+    .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || 'Fehler ' + r.status), { status: r.status, login: j.login, via: j.via }); return j; });
 const icon = g => g.icon ? '<img src="https://cdn.discordapp.com/icons/' + esc(g.id) + '/' + esc(g.icon) + '.png?size=96" alt="">' : esc((g.name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 3));
 const chSel = (k, v, none = '— aus —') => '<select data-k="' + k + '"><option value="">' + none + '</option>' + G.channels.map(c => '<option value="' + c.id + '"' + (c.id === v ? ' selected' : '') + '># ' + esc(c.name) + '</option>').join('') + '</select>';
 const roleChips = (k, list) => '<div class="chips" data-roles="' + k + '">' + G.roles.map(r => '<span class="chip' + (list.includes(r.id) ? ' on' : '') + '" data-id="' + r.id + '"><i class="dot" style="background:' + (r.color ? '#' + r.color.toString(16).padStart(6, '0') : '#8a97aa') + '"></i>' + esc(r.name) + '</span>').join('') + '</div>';
@@ -64,7 +64,7 @@ async function boot() {
     try { me = await api('/me'); } catch (e) {
         $('#who').innerHTML = '';
         app.innerHTML = '<section class="hero"><div class="muted">GHOSTNODE · DISCORD</div><h1>GHOSTNODE BOT</h1><p>Levels, Begrüßung, Moderation, AutoMod, Rollen-Knöpfe, Umfragen, Giveaways, Tickets und mehr – hier stellst du alles für deinen Server ein.</p>'
-            + (e.login === false ? '<p class="muted">Das Dashboard ist noch nicht eingerichtet (DISCORD_CLIENT_SECRET / DASHBOARD_URL fehlen).</p>' : '<a class="btn gold" href="/login">Mit Discord anmelden</a>') + '</section>';
+            + (e.login === false ? '<p class="muted">Das Dashboard ist noch nicht eingerichtet (BOT_SSO_SECRET oder DISCORD_CLIENT_SECRET + DASHBOARD_URL fehlen).</p>' : '<a class="btn gold" href="/login">' + (e.via === 'ghostnode' ? 'Mit GhostNode anmelden' : 'Mit Discord anmelden') + '</a>') + '</section>';
         return;
     }
     $('#who').innerHTML = '<span class="user">' + (me.user.avatar ? '<img src="https://cdn.discordapp.com/avatars/' + esc(me.user.id) + '/' + esc(me.user.avatar) + '.png?size=64" alt="">' : '') + esc(me.user.name) + '</span> <a class="btn sm" href="/logout">Abmelden</a>';

@@ -56,7 +56,8 @@ Every change on `main` is tested and published as a ZIP: **[latest release](http
 | `NEXUS_BASE` | no | website with `market.php` / `p.php` (default `https://ghostnode-labs.dev`) |
 | `HYPERATE_RELAY` | no | HypeRate relay (default `https://hr.ghostnode-labs.dev`) |
 | `BOT_DATA` | no | folder for server data (default `./data`) |
-| `DISCORD_CLIENT_SECRET` | for dashboard | OAuth2 client secret (store as secret) |
+| `BOT_SSO_SECRET` | for dashboard (recommended) | sign-in through the GhostNode dashboard (`botdash.php` on the website): same key as generated there, at least 32 characters (store as secret); no OAuth2 redirect needed |
+| `DISCORD_CLIENT_SECRET` | for dashboard (alternative) | OAuth2 client secret (store as secret) |
 | `DASHBOARD_URL` | for dashboard | public address, e.g. `https://discord.ghostnode-labs.dev` |
 | `PORT` | no | dashboard + `/health` (set automatically on Plesk/Passenger; `SERVER_PORT` from Pterodactyl is used too) |
 | `HOST` | no | bind address, e.g. `127.0.0.1` behind a reverse proxy (set by `server/ghostnode-root.sh` of the website repo); default: all interfaces |
@@ -85,6 +86,14 @@ journalctl -u ghostnode-bot -f
    Then open `https://discord.ghostnode-labs.dev/health` – it shows `{"ok":true,…}` when the bot is connected; `/` is the dashboard.
 
 A root server with systemd (above) is still the most reliable place.
+
+## Dashboard sign-in through GhostNode
+
+On the website, open **Bot-Dashboard** (`botdash.php`). An admin sets two things there:
+- the bot address, e.g. `https://discord.ghostnode-labs.dev`, or for now `http://IP:port`
+- a shared key, which goes into `BOT_SSO_SECRET` on the bot
+
+After that, anyone with a GhostNode account and a linked Discord account can click **Bot-Dashboard öffnen**. The website hands over a signed one-time ticket, valid for 60 s. The bot then checks with its own token which servers the person may manage (owner, administrator or "Manage Server"). No redirect has to be registered in the Discord developer portal.
 
 ## Run in Pterodactyl
 
