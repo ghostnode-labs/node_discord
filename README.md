@@ -58,7 +58,8 @@ Every change on `main` is tested and published as a ZIP: **[latest release](http
 | `BOT_DATA` | no | folder for server data (default `./data`) |
 | `DISCORD_CLIENT_SECRET` | for dashboard | OAuth2 client secret (store as secret) |
 | `DASHBOARD_URL` | for dashboard | public address, e.g. `https://discord.ghostnode-labs.dev` |
-| `PORT` | no | dashboard + `/health` (set automatically on Plesk/Passenger) |
+| `PORT` | no | dashboard + `/health` (set automatically on Plesk/Passenger; `SERVER_PORT` from Pterodactyl is used too) |
+| `HOST` | no | bind address, e.g. `127.0.0.1` behind a reverse proxy (set by `server/ghostnode-root.sh` of the website repo); default: all interfaces |
 
 ## Run on a Linux server (recommended)
 
@@ -84,6 +85,17 @@ journalctl -u ghostnode-bot -f
    Then open `https://discord.ghostnode-labs.dev/health` – it shows `{"ok":true,…}` when the bot is connected; `/` is the dashboard.
 
 A root server with systemd (above) is still the most reliable place.
+
+## Run in Pterodactyl
+
+Import [`pterodactyl/egg-ghostnode-discord-bot.json`](pterodactyl/egg-ghostnode-discord-bot.json) under Admin → Nests → *Import Egg*.
+Then create a server with that egg:
+
+- **Allocation:** use `127.0.0.1:18092`, so only the reverse proxy can reach the dashboard. `server/ghostnode-root.sh` of the website repo sets up nginx + HTTPS for `discord.<domain>` in front of it.
+- **Variables:** enter the token and the other settings as panel variables, never in files.
+- **Updates:** with `AUTO_UPDATE = 1` the server runs `git pull` on every restart.
+
+The image is Node.js 22, and no npm packages are installed. The console shows `Web-Dashboard und /health auf Port …` once the bot is ready.
 
 ## Troubleshooting
 

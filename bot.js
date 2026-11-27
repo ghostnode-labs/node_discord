@@ -23,7 +23,7 @@ const CFG = {
     api: env('DISCORD_API', 'https://discord.com/api/v10').replace(/\/+$/, ''), gateway: env('DISCORD_GATEWAY', 'wss://gateway.discord.gg'),
     nexus: env('NEXUS_BASE', 'https://ghostnode-labs.dev').replace(/\/+$/, ''), relay: env('HYPERATE_RELAY', 'https://hr.ghostnode-labs.dev').replace(/\/+$/, ''),
     repo: env('GITHUB_REPO', 'ghostnode-labs/vrc_nexus'), github: env('GITHUB_API', 'https://api.github.com').replace(/\/+$/, ''),
-    releaseChannel: env('RELEASE_CHANNEL_ID'), state: env('BOT_STATE', path.join(__dirname, 'bot-state.json')), port: Number(env('PORT')) || 0,
+    releaseChannel: env('RELEASE_CHANNEL_ID'), state: env('BOT_STATE', path.join(__dirname, 'bot-state.json')), port: Number(env('PORT') || env('SERVER_PORT')) || 0,   // SERVER_PORT = Pterodactyl
     data: env('BOT_DATA', path.join(__dirname, 'data')), privileged: env('BOT_PRIVILEGED_INTENTS', '1') !== '0',
 };
 // GUILDS + GUILD_MESSAGES (Levels, !Befehle) – privilegiert: GUILD_MEMBERS (Willkommen, Autorollen), MESSAGE_CONTENT (AutoMod, !Befehle, Logs)
@@ -255,7 +255,7 @@ async function start() {
         if (!port) process.exit(1);
         // unter Plesk nicht beenden, sondern anzeigen, was fehlt (nur Namen, nie Werte)
         const seen = Object.keys(process.env).filter(k => /^(DISCORD_|DASHBOARD_|RELEASE_|NEXUS_|HYPERATE_|BOT_)/.test(k)).sort();
-        http.createServer((q, s) => { s.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' }); s.end(JSON.stringify({ ok: false, error: msg, variables_seen: seen, node: process.version }, null, 2)); }).listen(port);
+        http.createServer((q, s) => { s.writeHead(503, { 'Content-Type': 'application/json; charset=utf-8' }); s.end(JSON.stringify({ ok: false, error: msg, variables_seen: seen, node: process.version }, null, 2)); }).listen(...listenArgs(port), () => log('Hinweisseite (fehlende Einstellungen) auf Port', port));
         return null;
     }
     if (typeof WebSocket === 'undefined') { console.error('Node ≥ 22 nötig.'); process.exit(1); }
@@ -276,7 +276,7 @@ async function start() {
     if (port) {
         const dash = require('./dashboard').createDashboard({ CFG, rest, store, log, botGuilds });
         http.createServer((q, s) => { if (q.url === '/health' || q.url.startsWith('/health?')) { s.writeHead(200, { 'Content-Type': 'application/json' }); return s.end(JSON.stringify({ ok: gw.ready, service: 'ghostnode-discord-bot', version: require('./package.json').version, uptime_s: Math.round((Date.now() - gw.started) / 1000), connected_s: gw.ready ? Math.round((Date.now() - gw.readyAt) / 1000) : 0, reconnects: gw.closes, last_close: gw.lastClose, privileged_intents: !!(INTENTS & I.CONTENT), servers: botGuilds().length })); }
-            dash.handle(q, s).catch(e => { log('Dashboard:', e.message); try { s.writeHead(500); s.end(); } catch (x) { /* schon gesendet */ } }); }).listen(port);
+            dash.handle(q, s).catch(e => { log('Dashboard:', e.message); try { s.writeHead(500); s.end(); } catch (x) { /* schon gesendet */ } }); }).listen(...listenArgs(port), () => log('Web-Dashboard und /health auf Port', port));
     }
     const bye = () => { gw.stop(); store.flushAll(); process.exit(0); };
     process.on('SIGTERM', bye); process.on('SIGINT', bye);
@@ -285,3 +285,6 @@ async function start() {
 
 if (process.env.BOT_NO_AUTOSTART !== '1') start();
 module.exports = { CFG, COMMANDS, HANDLERS, F, C, store, botGuilds, Gateway, onInteraction, checkRelease, registerCommands, firstHeartRate, start };
+
+/** HOST (optional): z. B. 127.0.0.1 hinter einem Reverse-Proxy (ghostnode-root.sh); ohne HOST wie bisher auf allen Adressen (Plesk/Passenger) */
+function listenArgs(port) { return process.env.HOST ? [port, process.env.HOST] : [port]; }

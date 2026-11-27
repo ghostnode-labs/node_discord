@@ -1,0 +1,142 @@
+{
+    "_comment": "GhostNode Discord-Bot – Pterodactyl-Egg (Admin → Nests → Import Egg). Node.js 22, keine npm-Pakete.",
+    "meta": {
+        "version": "PTDL_v2",
+        "update_url": null
+    },
+    "exported_at": "2026-11-27T14:00:00+01:00",
+    "name": "GhostNode Discord-Bot",
+    "author": "noreply@ghostnode-labs.dev",
+    "description": "Community-Bot für den GhostNode-Discord (Level, Moderation, AutoMod, Rollen, Umfragen, Giveaways, Tickets, VRC-Nexus-Clubs) mit Web-Dashboard. Node.js 22, ohne npm-Pakete. Schlüssel nur hier in den Variablen eintragen – nie in Dateien.",
+    "features": null,
+    "docker_images": {
+        "Node.js 22": "ghcr.io/parkervcp/yolks:nodejs_22"
+    },
+    "file_denylist": [],
+    "startup": "if [ \"{{AUTO_UPDATE}}\" = \"1\" ] && [ -d .git ]; then git pull --ff-only -q || echo 'Update fehlgeschlagen – starte die vorhandene Version'; fi; node bot.js",
+    "config": {
+        "files": "{}",
+        "startup": "{\"done\": [\"Web-Dashboard und /health auf Port\", \"Hinweisseite (fehlende Einstellungen) auf Port\"]}",
+        "logs": "{}",
+        "stop": "^C"
+    },
+    "scripts": {
+        "installation": {
+            "script": "#!/bin/bash\n# GhostNode Discord-Bot – Installation/Neuinstallation (läuft im Installer-Container, Ziel /mnt/server)\n# Holt den Bot von GitHub; vorhandene Daten in data/ bleiben bei einer Neuinstallation erhalten.\nset -e\ncommand -v git >/dev/null || { apt-get update -qq && apt-get install -y -qq git ca-certificates >/dev/null; }\ncd /mnt/server\nREPO=\"${GIT_REPO:-https://github.com/ghostnode-labs/node_discord.git}\"\nif [ -d .git ]; then\n    git pull --ff-only\nelse\n    rm -rf /tmp/bot && git clone --depth 1 \"$REPO\" /tmp/bot\n    cp -a /tmp/bot/. /mnt/server/ && rm -rf /tmp/bot\nfi\nmkdir -p data\necho \"GhostNode-Bot installiert: $(git log -1 --format='%h %s' 2>/dev/null)\"\n",
+            "container": "ghcr.io/parkervcp/installers:debian",
+            "entrypoint": "bash"
+        }
+    },
+    "variables": [
+        {
+            "name": "Bot-Token",
+            "description": "Discord-Entwicklerportal → Bot → Token. Geheim halten.",
+            "env_variable": "DISCORD_TOKEN",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:200",
+            "field_type": "text"
+        },
+        {
+            "name": "Application-ID",
+            "description": "Discord-Entwicklerportal → General Information → Application ID.",
+            "env_variable": "DISCORD_APP_ID",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:30",
+            "field_type": "text"
+        },
+        {
+            "name": "Server-ID (optional)",
+            "description": "Deine Discord-Server-ID – Befehle erscheinen sofort (sonst global, bis zu 1 h).",
+            "env_variable": "DISCORD_GUILD_ID",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:30",
+            "field_type": "text"
+        },
+        {
+            "name": "Kanal für Releases (optional)",
+            "description": "Kanal-ID für automatische VRC-Nexus-Release-Meldungen.",
+            "env_variable": "RELEASE_CHANNEL_ID",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:30",
+            "field_type": "text"
+        },
+        {
+            "name": "OAuth2-Client-Secret (Dashboard)",
+            "description": "Discord-Portal → OAuth2 → Client Secret. Dort als Redirect <Dashboard-Adresse>/callback eintragen. Geheim halten.",
+            "env_variable": "DISCORD_CLIENT_SECRET",
+            "default_value": "",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:200",
+            "field_type": "text"
+        },
+        {
+            "name": "Dashboard-Adresse",
+            "description": "Öffentliche HTTPS-Adresse des Dashboards (nginx leitet auf diesen Server weiter).",
+            "env_variable": "DASHBOARD_URL",
+            "default_value": "https://discord.ghostnode-labs.dev",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "nullable|string|max:200",
+            "field_type": "text"
+        },
+        {
+            "name": "GhostNode-Webseite",
+            "description": "Webseite mit market.php / p.php / nexusclubs.php.",
+            "env_variable": "NEXUS_BASE",
+            "default_value": "https://ghostnode-labs.dev",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:200",
+            "field_type": "text"
+        },
+        {
+            "name": "HypeRate-Weiterleitung",
+            "description": "Adresse der HypeRate-Weiterleitung (für /puls).",
+            "env_variable": "HYPERATE_RELAY",
+            "default_value": "https://hr.ghostnode-labs.dev",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:200",
+            "field_type": "text"
+        },
+        {
+            "name": "Privilegierte Intents",
+            "description": "1 = Server Members + Message Content (Begrüßung, AutoMod, !Befehle, Logs) – im Entwicklerportal einschalten. 0 = ohne.",
+            "env_variable": "BOT_PRIVILEGED_INTENTS",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:0,1",
+            "field_type": "text"
+        },
+        {
+            "name": "Automatisch aktualisieren",
+            "description": "1 = bei jedem Start die neueste Version von GitHub holen (git pull). 0 = Version bleibt.",
+            "env_variable": "AUTO_UPDATE",
+            "default_value": "1",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|in:0,1",
+            "field_type": "text"
+        },
+        {
+            "name": "Git-Repository",
+            "description": "Quelle für Installation und Updates.",
+            "env_variable": "GIT_REPO",
+            "default_value": "https://github.com/ghostnode-labs/node_discord.git",
+            "user_viewable": true,
+            "user_editable": true,
+            "rules": "required|string|max:200",
+            "field_type": "text"
+        }
+    ]
+}
