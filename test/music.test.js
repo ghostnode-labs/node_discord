@@ -1,0 +1,116 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert');
+const fs = require('fs'), os = require('os'), path = require('path'), http = require('http'), crypto = require('crypto');
+const { Store } = require('../store');
+const music = require('../music');
+
+/** Mini-Lavalink: REST + WebSocket (Textrahmen ohne Maske vom Server) – nur für Tests */
+function fakeLavalink() {
+    const calls = [], socks = [];
+    const tracks = { lofi: { encoded: 'E1', info: { title: 'Lofi Beats', author: 'Chill', length: 180000, uri: 'https://yt/1', isSeekable: true, isStream: false, sourceName: 'youtube' } },
+        rock: { encoded: 'E2', info: { title: 'Rock On', author: 'Band', length: 200000, uri: 'https://yt/2', isSeekable: true, isStream: false, sourceName: 'youtube' } } };
+    const srv = http.createServer((q, s) => { let b = ''; q.on('data', c => { b += c; }); q.on('end', () => {
+        calls.push([q.method, q.url, b ? JSON.parse(b) : null, q.headers.authorization]);
+        if (q.headers.authorization !== 'pw') { s.writeHead(401); return s.end('{}'); }
+        const u = new URL(q.url, 'http://x');
+        if (u.pathname === '/v4/loadtracks') {
+            const id = u.searchParams.get('identifier');
+            const key = Object.keys(tracks).find(k => id.endsWith(':' + k));
+            if (id.startsWith('https://list')) return json(s, { loadType: 'playlist', data: { info: { name: 'Mix' }, tracks: [tracks.lofi, tracks.rock] } });
+            return json(s, key ? { loadType: 'search', data: [tracks[key]] } : { loadType: 'empty', data: {} });
+        }
+        if (q.method === 'DELETE') { s.writeHead(204); return s.end(); }
+        return json(s, {});
+    }); });
+    const json = (s, o) => { s.writeHead(200, { 'Content-Type': 'application/json' }); s.end(JSON.stringify(o)); };
+    srv.on('upgrade', (q, so) => {
+        calls.push(['WS', q.url, null, q.headers.authorization, q.headers['user-id']]);
+        const acc = crypto.createHash('sha1').update(q.headers['sec-websocket-key'] + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64');
+        so.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + acc + '\r\n\r\n');
+        so.on('error', () => {}); so.on('data', () => {});
+        socks.push(so);
+        push({ op: 'ready', resumed: false, sessionId: 'S1' });
+    });
+    function push(o) {
+        const p = Buffer.from(JSON.stringify(o)), h = p.length < 126 ? Buffer.from([0x81, p.length]) : Buffer.from([0x81, 126, p.length >> 8, p.length & 255]);
+        for (const so of socks) so.write(Buffer.concat([h, p]));
+    }
+    return { srv, calls, push, close: () => { for (const so of socks) so.destroy(); srv.close(); } };
+}
+const wait = (fn, ms = 3000) => new Promise((res, rej) => { const t0 = Date.now(); const i = setInterval(() => { const v = fn(); if (v) { clearInterval(i); res(v); } else if (Date.now() - t0 > ms) { clearInterval(i); rej(new Error('Zeitüberschreitung')); } }, 10); });
+
+test('Musik: ohne Lavalink verständliche Meldung, Zeiten, Effekte', async () => {
+    const store = new Store(fs.mkdtempSync(path.join(os.tmpdir(), 'gn-mu0-')));
+    const M = music.create({ rest: async () => ({}), log: () => {}, store, botId: () => '42', voice: () => {} });
+    const it = { guild_id: '1', channel_id: 'T', member: { user: { id: '7' }, roles: [], permissions: '0' } };
+    await assert.rejects(M.H.play(it, { suche: 'x' }), /nicht eingerichtet/);
+    assert.strictEqual(music.fmt(65000), '1:05'); assert.strictEqual(music.fmt(3725000), '1:02:05'); assert.strictEqual(music.fmt(0), 'LIVE');
+    assert.strictEqual(music.parseTime('1:30'), 90000); assert.strictEqual(music.parseTime('45'), 45000); assert.strictEqual(music.parseTime('a:b'), -1);
+    assert.ok(music.EFFECTS.nightcore.f.timescale && music.EFFECTS.aus.f);
+});
+
+test('Musik: Sprachkanal → Lavalink, Warteschlange, Titelwechsel, DJ-Rolle, Knöpfe, Stopp', async () => {
+    const L = fakeLavalink(); await new Promise(r => L.srv.listen(0, '127.0.0.1', r));
+    const store = new Store(fs.mkdtempSync(path.join(os.tmpdir(), 'gn-mu-')));
+    const sent = [], voiceCalls = [];
+    let M;
+    const rest = async (m, route, body) => { sent.push([m, route, body]); return m === 'POST' ? { id: 'np' + sent.length } : null; };
+    M = music.create({ rest, log: () => {}, store, botId: () => '42', url: 'http://127.0.0.1:' + L.srv.address().port, password: 'pw',
+        voice: (gid, ch) => { voiceCalls.push([gid, ch]); if (ch) setTimeout(() => { M.onVoiceState({ guild_id: gid, user_id: '42', channel_id: ch, session_id: 'sess' }); M.onVoiceServer({ guild_id: gid, token: 'tok', endpoint: 'ep.discord.media' }); }, 5); } });
+    try {
+        M.connect();
+        await wait(() => L.calls.some(c => c[0] === 'WS'));
+        const ws = L.calls.find(c => c[0] === 'WS'); assert.strictEqual(ws[3], 'pw'); assert.strictEqual(ws[4], '42', 'User-Id = Bot');
+        await wait(() => M.health().online);
+        M.onGuild({ id: 'G', voice_states: [{ user_id: '7', channel_id: 'V' }, { user_id: '8', channel_id: 'V' }] });
+        const it = uid => ({ guild_id: 'G', channel_id: 'T', member: { user: { id: uid }, roles: [], permissions: '0' } });
+        // nicht im Sprachkanal
+        await assert.rejects(M.H.play(it('99'), { suche: 'lofi' }), /Sprachkanal/);
+        // erster Titel: beitreten, Sprachdaten weiterreichen, abspielen
+        let r = await M.H.play(it('7'), { suche: 'lofi' });
+        assert.match(r.content, /Lofi Beats/);
+        assert.deepStrictEqual(voiceCalls[0], ['G', 'V']);
+        const patches = () => L.calls.filter(c => c[0] === 'PATCH' && c[1].startsWith('/v4/sessions/S1/players/G')).map(c => c[2]);
+        assert.deepStrictEqual(patches()[0].voice, { token: 'tok', endpoint: 'ep.discord.media', sessionId: 'sess', channelId: 'V' });
+        assert.strictEqual(patches()[1].track.encoded, 'E1'); assert.strictEqual(patches()[1].volume, 80);
+        assert.ok(L.calls.some(c => c[1].includes('identifier=ytsearch%3Alofi')), 'Suche über YouTube');
+        // zweiter Titel landet in der Warteschlange
+        r = await M.H.play(it('8'), { suche: 'rock' });
+        assert.match(r.embeds[0].description, /Rock On.*Platz 1/);
+        // Start-Ereignis → „Jetzt läuft“-Nachricht mit Knöpfen
+        L.push({ op: 'event', type: 'TrackStartEvent', guildId: 'G', track: {} });
+        await wait(() => sent.some(s => s[0] === 'POST' && s[1] === '/channels/T/messages'));
+        const np = sent.find(s => s[0] === 'POST' && s[1] === '/channels/T/messages')[2];
+        assert.match(np.embeds[0].title, /Lofi Beats/); assert.ok(np.components[0].components.some(b => b.custom_id === 'mu:skip'));
+        // Titel zu Ende → nächster
+        L.push({ op: 'event', type: 'TrackEndEvent', guildId: 'G', reason: 'finished' });
+        await wait(() => patches().some(p => p.track && p.track.encoded === 'E2'));
+        // DJ-Rolle: ohne Rolle kein Stopp, aber Pause geht
+        store.get('G').music = { dj: 'R1' }; store.save('G');
+        await assert.rejects(M.H.musik(it('7'), {}, null, 'stopp'), /DJ-Rolle/);
+        r = await M.H.musik(it('7'), {}, null, 'pause'); assert.match(r.content, /Pausiert/);
+        assert.ok(patches().some(p => p.paused === true));
+        // Knopf: Wer nicht im Kanal ist, darf nicht steuern; im Kanal + eigener Titel → Überspringen erlaubt
+        let b = await M.onComponent({ guild_id: 'G', data: { custom_id: 'mu:skip' }, member: { user: { id: '99' }, roles: [], permissions: '0' } });
+        assert.match(b.data.content, /Komm in/);
+        b = await M.onComponent({ guild_id: 'G', data: { custom_id: 'mu:skip' }, member: { user: { id: '8' }, roles: [], permissions: '0' } });
+        assert.ok(b.data.content && /Übersprungen/.test(b.data.content), JSON.stringify(b));
+        assert.ok(patches().some(p => p.track && p.track.encoded === null), 'leere Warteschlange → angehalten');
+        // Mit DJ-Rolle: Lautstärke, Effekt
+        const dj = { guild_id: 'G', channel_id: 'T', member: { user: { id: '7' }, roles: ['R1'], permissions: '0' } };
+        await M.H.play(dj, { suche: 'lofi' });
+        r = await M.H.musik(dj, { wert: 120 }, null, 'lautstaerke'); assert.match(r.content, /120/);
+        r = await M.H.musik(dj, { name: 'nightcore' }, null, 'effekt'); assert.match(r.content, /Nightcore/);
+        assert.ok(patches().some(p => p.filters && p.filters.timescale && p.filters.timescale.speed === 1.2));
+        const st = M.status('G'); assert.strictEqual(st.current.title, 'Lofi Beats'); assert.strictEqual(st.volume, 120); assert.strictEqual(st.channel, 'V');
+        // Playlist
+        r = await M.H.play(dj, { suche: 'https://list.example/mix' }); assert.match(r.embeds[0].description, /Playlist \*\*Mix\*\*: 2 Titel/);
+        assert.strictEqual(M.status('G').total, 2);
+        // Verlassen
+        r = await M.H.musik(dj, {}, null, 'verlassen'); assert.match(r.content, /Tschüss/);
+        assert.deepStrictEqual(voiceCalls[voiceCalls.length - 1], ['G', null]);
+        assert.ok(L.calls.some(c => c[0] === 'DELETE' && c[1] === '/v4/sessions/S1/players/G'));
+        assert.strictEqual(M.status('G').current, null);
+    } finally { M.stop(); L.close(); }
+});

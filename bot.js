@@ -27,8 +27,11 @@ const CFG = {
     data: env('BOT_DATA', path.join(__dirname, 'data')), privileged: env('BOT_PRIVILEGED_INTENTS', '1') !== '0',
 };
 // GUILDS + GUILD_MESSAGES (Levels, !Befehle) – privilegiert: GUILD_MEMBERS (Willkommen, Autorollen), MESSAGE_CONTENT (AutoMod, !Befehle, Logs)
-const I = { GUILDS: 1 << 0, MEMBERS: 1 << 1, MESSAGES: 1 << 9, CONTENT: 1 << 15 };
-let INTENTS = I.GUILDS | I.MESSAGES | (CFG.privileged ? I.MEMBERS | I.CONTENT : 0);
+// + VOICE_STATES (Musik, Temp-Sprachkanäle) und REACTIONS (Starboard) – beide nicht privilegiert
+const I = { GUILDS: 1 << 0, MEMBERS: 1 << 1, VOICE: 1 << 7, MESSAGES: 1 << 9, REACTIONS: 1 << 10, CONTENT: 1 << 15 };
+const BASE_INTENTS = I.GUILDS | I.MESSAGES | I.VOICE | I.REACTIONS;
+let INTENTS = BASE_INTENTS | (CFG.privileged ? I.MEMBERS | I.CONTENT : 0);
+let BOT_ID = '';
 const log = (...a) => console.log(new Date().toISOString(), ...a);
 
 // ---------------- REST ----------------
@@ -65,6 +68,15 @@ COMMANDS.push(...F.COMMANDS);
 // Club-Abgleich mit VRC Nexus (Events & Erinnerungen)
 const C = require('./clubs').create({ rest: (...a) => rest(...a), log: (...a) => log(...a), store, nexus: CFG.nexus });
 COMMANDS.push(...C.COMMANDS); Object.assign(F.H, C.H); F.EPH.add('club');
+// Musik über Lavalink (eigener Dienst; ohne LAVALINK_URL/LAVALINK_PASSWORD sagen die Befehle, dass Musik nicht eingerichtet ist)
+let GW = null;
+const M = require('./music').create({ rest: (...a) => rest(...a), log: (...a) => log(...a), store, botId: () => BOT_ID,
+    url: env('LAVALINK_URL'), password: env('LAVALINK_PASSWORD'), search: env('MUSIC_SEARCH', 'ytsearch'),
+    voice: (gid, ch) => { if (GW) GW.send(4, { guild_id: gid, channel_id: ch, self_mute: false, self_deaf: true }); } });
+COMMANDS.push(...M.COMMANDS); Object.assign(F.H, M.H); for (const n of M.EPH) F.EPH.add(n);
+// Extras: Info, Erinnerungen, Vorschläge, Starboard, Temp-Sprachkanäle, Spaß
+const X = require('./extras').create({ rest: (...a) => rest(...a), log: (...a) => log(...a), store, botId: () => BOT_ID });
+COMMANDS.push(...X.COMMANDS); Object.assign(F.H, X.H); for (const n of X.EPH) F.EPH.add(n);
 const getJson = async (url, ms = 8000) => { const r = await fetch(url, { signal: AbortSignal.timeout(ms), headers: { 'User-Agent': 'ghostnode-bot' } }); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); };
 /** Versionsnummer aus dem Tag – ab VRC Nexus „10“ als Datum angezeigt (intern 2026.1127.1 → v2026.11.27.1) */
 const tagVer = t => {
@@ -152,7 +164,8 @@ async function answer(it, name, run, eph) {
 async function onInteraction(it) {
     if (it.type === 3 && it.data) {   // Knöpfe
         let res;
-        try { res = await F.onComponent(it); } catch (e) { log('Knopf:', e.message); res = { type: 4, data: { content: '⚠ ' + e.message.replace(/^Discord \S+ \S+: /, ''), flags: 64 } }; }
+        const cid = String(it.data.custom_id || '');
+        try { res = cid.startsWith('mu:') ? await M.onComponent(it) : cid.startsWith('gx:') ? await X.onComponent(it) : await F.onComponent(it); } catch (e) { log('Knopf:', e.message); res = { type: 4, data: { content: '⚠ ' + e.message.replace(/^Discord \S+ \S+: /, ''), flags: 64 } }; }
         return rest('POST', '/interactions/' + it.id + '/' + it.token + '/callback', res);
     }
     if (it.type !== 2 || !it.data) return;   // nur Slash-Befehle
@@ -199,7 +212,7 @@ class Gateway {
             if (this.ws !== ws || this.stopped) return;
             if (ev.code === 4014 && INTENTS & (I.MEMBERS | I.CONTENT)) {   // privilegierte Intents nicht freigeschaltet → ohne weiter
                 log('⚠ „Server Members Intent“ / „Message Content Intent“ sind im Developer Portal nicht an – Begrüßung, Autorollen, AutoMod und !Befehle bleiben aus.');
-                INTENTS = I.GUILDS | I.MESSAGES; this.session = ''; this.seq = null; setTimeout(() => this.connect(), 1000); return;
+                INTENTS = BASE_INTENTS; this.session = ''; this.seq = null; setTimeout(() => this.connect(), 1000); return;
             }
             if ([4004, 4010, 4011, 4012, 4013, 4014].includes(ev.code)) { log('Gateway abgelehnt (Code ' + ev.code + ') – Token/Intents prüfen. Kein Neustart.'); return; }
             if ([4007, 4009].includes(ev.code)) { this.session = ''; this.seq = null; }
@@ -225,13 +238,16 @@ class Gateway {
             case 7: try { this.ws.close(4000); } catch (e) { /* egal */ } return;   // Neu verbinden
             case 9: if (!m.d) { this.session = ''; this.seq = null; } setTimeout(() => { try { this.ws.close(4000); } catch (e) { /* egal */ } }, 1000 + Math.random() * 4000); return;
             case 0:
-                if (m.t === 'READY') { this.session = m.d.session_id; this.resumeUrl = m.d.resume_gateway_url || ''; this.ready = true; this.readyAt = Date.now(); this.backoff = 1000; log('Bot bereit als', m.d.user && m.d.user.username); }
+                if (m.t === 'READY') { if (m.d.user && m.d.user.id && !BOT_ID) { BOT_ID = String(m.d.user.id); M.connect(); } this.session = m.d.session_id; this.resumeUrl = m.d.resume_gateway_url || ''; this.ready = true; this.readyAt = Date.now(); this.backoff = 1000; log('Bot bereit als', m.d.user && m.d.user.username); }
                 else if (m.t === 'RESUMED') { this.ready = true; this.backoff = 1000; log('Verbindung wieder aufgenommen'); }
                 else if (m.t === 'INTERACTION_CREATE') await onInteraction(m.d);
                 else if (m.t === 'MESSAGE_CREATE') await F.onMessage(m.d);
                 else if (m.t === 'GUILD_MEMBER_ADD') await F.onMemberAdd(m.d);
                 else if (m.t === 'GUILD_MEMBER_REMOVE') await F.onMemberRemove(m.d);
-                else if (m.t === 'GUILD_CREATE') F.onGuild(m.d);
+                else if (m.t === 'GUILD_CREATE') { F.onGuild(m.d); M.onGuild(m.d); X.onGuild(m.d); }
+                else if (m.t === 'VOICE_STATE_UPDATE') { M.onVoiceState(m.d); await X.onVoiceState(m.d); }
+                else if (m.t === 'VOICE_SERVER_UPDATE') M.onVoiceServer(m.d);
+                else if (m.t === 'MESSAGE_REACTION_ADD' || m.t === 'MESSAGE_REACTION_REMOVE') await X.onReaction(m.d, m.t === 'MESSAGE_REACTION_ADD');
                 else if (m.t === 'GUILD_DELETE' && !m.d.unavailable) { const d = store.get(m.d.id); d.meta.left = true; store.save(m.d.id); }
                 else if (m.t === 'MESSAGE_DELETE') F.onMessageDelete(m.d);
                 else if (m.t === 'MESSAGE_UPDATE') F.onMessageUpdate(m.d);
@@ -260,10 +276,11 @@ async function start() {
     }
     if (typeof WebSocket === 'undefined') { console.error('Node ≥ 22 nötig.'); process.exit(1); }
     await registerCommands().catch(e => log('Befehle nicht registriert:', e.message));
-    const gw = new Gateway(); gw.connect();
+    const gw = GW = new Gateway(); gw.connect();
     const rel = () => checkRelease().catch(e => log('Release-Prüfung:', e.message));
     setTimeout(rel, 15000); setInterval(rel, 10 * 60000);
     setInterval(() => F.tick().catch(e => log('Zeitsteuerung:', e.message)), 30000);
+    setInterval(() => X.tick().catch(e => log('Erinnerungen:', e.message)), 20000);
     setInterval(() => C.tick().catch(e => log('Club-Abgleich:', e.message)), 60000);
     // Plesk/Passenger beendet Apps ohne Besuch nach einigen Minuten – sich selbst über die öffentliche Adresse wach halten
     const selfUrl = env('KEEPALIVE_URL', env('DASHBOARD_URL') ? env('DASHBOARD_URL').replace(/\/+$/, '') + '/health?keepalive=1' : '');
@@ -274,8 +291,8 @@ async function start() {
     // Web-Dashboard + /health (Plesk/Passenger erwartet ohnehin einen HTTP-Dienst – dort immer lauschen)
     const port = CFG.port || (process.env.IN_PASSENGER === '1' || typeof PhusionPassenger !== 'undefined' ? 3000 : 0);
     if (port) {
-        const dash = require('./dashboard').createDashboard({ CFG, rest, store, log, botGuilds });
-        http.createServer((q, s) => { if (q.url === '/health' || q.url.startsWith('/health?')) { s.writeHead(200, { 'Content-Type': 'application/json' }); return s.end(JSON.stringify({ ok: gw.ready, service: 'ghostnode-discord-bot', version: require('./package.json').version, uptime_s: Math.round((Date.now() - gw.started) / 1000), connected_s: gw.ready ? Math.round((Date.now() - gw.readyAt) / 1000) : 0, reconnects: gw.closes, last_close: gw.lastClose, privileged_intents: !!(INTENTS & I.CONTENT), servers: botGuilds().length })); }
+        const dash = require('./dashboard').createDashboard({ CFG, rest, store, log, botGuilds, music: M, extras: X });
+        http.createServer((q, s) => { if (q.url === '/health' || q.url.startsWith('/health?')) { s.writeHead(200, { 'Content-Type': 'application/json' }); return s.end(JSON.stringify({ ok: gw.ready, service: 'ghostnode-discord-bot', version: require('./package.json').version, uptime_s: Math.round((Date.now() - gw.started) / 1000), connected_s: gw.ready ? Math.round((Date.now() - gw.readyAt) / 1000) : 0, reconnects: gw.closes, last_close: gw.lastClose, privileged_intents: !!(INTENTS & I.CONTENT), music: M.health(), servers: botGuilds().length })); }
             dash.handle(q, s).catch(e => { log('Dashboard:', e.message); try { s.writeHead(500); s.end(); } catch (x) { /* schon gesendet */ } }); }).listen(...listenArgs(port), () => log('Web-Dashboard und /health auf Port', port));
     }
     const bye = () => { gw.stop(); store.flushAll(); process.exit(0); };
@@ -284,7 +301,7 @@ async function start() {
 }
 
 if (process.env.BOT_NO_AUTOSTART !== '1') start();
-module.exports = { CFG, COMMANDS, HANDLERS, F, C, store, botGuilds, Gateway, onInteraction, checkRelease, registerCommands, firstHeartRate, start };
+module.exports = { CFG, COMMANDS, HANDLERS, F, C, M, X, store, botGuilds, Gateway, onInteraction, checkRelease, registerCommands, firstHeartRate, start };
 
 /** HOST (optional): z. B. 127.0.0.1 hinter einem Reverse-Proxy (ghostnode-root.sh); ohne HOST wie bisher auf allen Adressen (Plesk/Passenger) */
 function listenArgs(port) { return process.env.HOST ? [port, process.env.HOST] : [port]; }

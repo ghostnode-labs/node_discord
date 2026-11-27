@@ -2,7 +2,7 @@
 
 Community bot for the GhostNode Discord (Node.js ≥ 22, **no npm packages**) with a **web dashboard**. Talks to the Discord gateway and REST API itself; data is stored per server in `data/<server-id>.json`.
 
-Files: `bot.js` (gateway, REST, VRC Nexus commands), `features.js` (community features), `clubs.js` (VRC Nexus club sync), `store.js` (storage), `dashboard.js` + `dashboard.html` (web dashboard), `test/` (`npm test`, no dependencies).
+Files: `bot.js` (gateway, REST, VRC Nexus commands), `features.js` (community features), `music.js` (music via Lavalink), `extras.js` (info, reminders, suggestions, starboard, temp voice, fun), `clubs.js` (VRC Nexus club sync), `store.js` (storage), `dashboard.js` + `dashboard.html` (web dashboard), `test/` (`npm test`, no dependencies).
 
 | Area | Commands / behaviour |
 |---|---|
@@ -19,14 +19,29 @@ Files: `bot.js` (gateway, REST, VRC Nexus commands), `features.js` (community fe
 | 📜 Logs | joins/leaves, deleted and edited messages |
 | 🏠 Nexus clubs | `/club verbinden <club> <channel> [role] [reminder]` – posts new public events of a VRC Nexus club, a reminder before the start (5 min – 1 day) and cancellations; `/club liste`, `/club jetzt`, `/club trennen`. Up to 5 clubs per server, read-only feed `nexusclubs.php?discord=<club>` (members-only events are never posted), polled every 10 min and every minute shortly before an event. Already planned events are not reposted when connecting. |
 | 🥽 VRC Nexus | `/status`, `/release`, `/poster`, `/marktplatz`, `/puls`, automatic release posts |
-| 🎲 Fun | `/wuerfel`, `/muenze`, `/hilfe` |
+| 🎵 Music | `/play <title or link>` (YouTube, SoundCloud, Bandcamp, Twitch, Vimeo, radio/HTTP streams, playlists up to 200 tracks) · `/musik jetzt, warteschlange, pause, skip, stopp, lautstaerke, wiederholen, mischen, entfernen, springen, effekt, verlassen` · "now playing" message with buttons (pause, skip, stop, loop, shuffle, volume, queue) · effects: bass boost, nightcore, vaporwave, 8D, karaoke, slow · optional DJ role, music text channel, default volume, 24/7 mode · leaves by itself after 2 min alone / 3 min idle · live control in the dashboard |
+| 💡 Suggestions | `/vorschlag` – 👍/👎 voting (changeable), team accepts/rejects, optional suggestion channel |
+| ⭐ Starboard | messages with N× ⭐ (configurable emoji/threshold) are reposted to a hall-of-fame channel, count kept up to date |
+| 🔊 Temp voice | joining the "➕ create" voice channel creates an own voice channel (name `{name}`, optional user limit, owner may manage it); deleted when empty, orphans cleaned after restart |
+| ⏰ Reminders | `/erinnerung neu in:2h text:…`, `/erinnerung liste` (delete buttons) – delivered in the channel, DM as fallback |
+| ℹ Info | `/info server`, `/info nutzer`, `/avatar` |
+| 🎲 Fun | `/wuerfel`, `/muenze`, `/8ball`, `/auswahl`, `/zufall`, `/hilfe` |
 
 Everything can be configured in the **web dashboard** or in Discord with `/einstellungen …` (needs *Manage Server*); moderation commands are only shown to members with the matching Discord permission and are checked again by the bot.
 
 **Developer Portal → Bot:** switch on **Server Members Intent** and **Message Content Intent** (needed for welcome, auto-roles, AutoMod, `!commands`, logs). Without them the bot still runs with the other features (or set `BOT_PRIVILEGED_INTENTS=0`).
 
-**Invite link permissions:** `1460557409286` (view channels, send messages, embeds, history, manage messages, kick, ban, manage roles, moderate members, private threads). The bot's role must be **above** the roles it hands out.
+**Invite link permissions:** `1460577332246` (view channels, send messages, embeds, history, manage messages, kick, ban, manage roles, moderate members, private threads, manage channels and move members for temp voice, connect + speak for music). Bots invited with the old link: re-invite with the new link or give the bot role *Connect*, *Speak*, *Manage Channels* and *Move Members*. The bot's role must be **above** the roles it hands out.
 
+
+## Music (Lavalink)
+
+Discord requires end-to-end encryption (DAVE) in voice channels since March 2026, so the bot does not stream audio itself: it controls a **Lavalink ≥ 4.2** server (Java, supports DAVE) over HTTP + WebSocket – still no npm packages in the bot.
+
+- **Linux server:** `bash ghostnode-root.sh bot` (or `install` / `update`) installs Java, the latest Lavalink and the YouTube plugin as service `ghostnode-lavalink` on `127.0.0.1:2333`, creates a password and writes `LAVALINK_URL` / `LAVALINK_PASSWORD` into the bot's environment. Needs glibc ≥ 2.35 (Ubuntu 22.04 / Debian 12+) and ~512 MB RAM. Skip with `--skip=music`.
+- **Elsewhere:** run Lavalink yourself and set `LAVALINK_URL` (e.g. `http://127.0.0.1:2333`) and `LAVALINK_PASSWORD`. Optional `MUSIC_SEARCH` (default `ytsearch`; falls back to YouTube Music and SoundCloud search).
+- Plesk/Passenger cannot run Lavalink; the bot then answers music commands with "not set up".
+- YouTube playback depends on the community YouTube plugin and may break when YouTube changes things; SoundCloud, Bandcamp, Twitch and direct streams keep working. Only play content you are allowed to share with your server.
 
 ## Web dashboard
 
@@ -44,7 +59,7 @@ Every change on `main` is tested and published as a ZIP: **[latest release](http
 ## Setup
 
 1. Discord Developer Portal → *New Application* → **Bot** → reset/copy the token. Note the *Application ID*.
-2. Invite: `https://discord.com/oauth2/authorize?client_id=<APP_ID>&scope=bot+applications.commands&permissions=1460557409286`
+2. Invite: `https://discord.com/oauth2/authorize?client_id=<APP_ID>&scope=bot+applications.commands&permissions=1460577332246`
 3. Environment (never commit these):
 
 | Variable | Required | Meaning |
@@ -107,6 +122,8 @@ Then create a server with that egg:
 The image is Node.js 22, and no npm packages are installed. The console shows `Web-Dashboard und /health auf Port …` once the bot is ready.
 
 ## Troubleshooting
+
+- **Music: "nicht eingerichtet"** – `LAVALINK_URL`/`LAVALINK_PASSWORD` missing → `bash ghostnode-root.sh bot`. **"Musik-Server nicht erreichbar"** → `systemctl status ghostnode-lavalink`, `journalctl -u ghostnode-lavalink -n 50`. **Bot joins but stays silent** → Lavalink older than 4.2 (no DAVE) or the bot role lacks *Speak*.
 
 - **„Es fehlen: DISCORD_TOKEN …“** – open `/health`: it lists which variable *names* the bot sees. Save the variables/secrets in *Node.js → Environment*, then **Restart App**. Do not start the bot via *Run Node.js commands* (`npm start` there gets no app environment). Last resort: a `.env` file next to `bot.js` with `KEY=value` lines (never commit it).
 - **Browser shows a certificate error** – issue a Let's Encrypt certificate for the subdomain.

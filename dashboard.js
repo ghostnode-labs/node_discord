@@ -18,7 +18,7 @@ const MANAGE = 1n << 5n, ADMIN = 1n << 3n;
 const SESSION_MS = 7 * 86400000;
 const TEXT_TYPES = [0, 5, 15];   // Text, Ankündigung, Forum
 
-function createDashboard({ CFG, rest, store, log, botGuilds, oauthFetch }) {
+function createDashboard({ CFG, rest, store, log, botGuilds, oauthFetch, music, extras }) {
     const sessions = new Map(), states = new Map(), cache = new Map();
     const secret = String(process.env.DISCORD_CLIENT_SECRET || '').trim();
     const base = String(process.env.DASHBOARD_URL || '').replace(/\/+$/, '');
@@ -48,6 +48,7 @@ function createDashboard({ CFG, rest, store, log, botGuilds, oauthFetch }) {
         if (c && Date.now() - c.at < 60000) return c;
         const [channels, roles] = await Promise.all([rest('GET', '/guilds/' + gid + '/channels'), rest('GET', '/guilds/' + gid + '/roles')]);
         const m = { at: Date.now(), channels: channels.filter(x => TEXT_TYPES.includes(x.type)).sort((a, b) => a.position - b.position).map(x => ({ id: x.id, name: x.name, type: x.type })),
+            voice: channels.filter(x => x.type === 2).sort((a, b) => a.position - b.position).map(x => ({ id: x.id, name: x.name })),
             roles: roles.filter(r => r.name !== '@everyone' && !r.managed).sort((a, b) => b.position - a.position).map(r => ({ id: r.id, name: r.name, color: r.color })) };
         cache.set(gid, m);
         return m;
@@ -224,13 +225,15 @@ function createDashboard({ CFG, rest, store, log, botGuilds, oauthFetch }) {
             const nb = new Set(await allBotGuilds(false));
             return send(res, 200, { guilds: s.guilds.map(g => Object.assign({ bot: nb.has(g.id) }, g)), diag: s.diag || null });
         }
-        if (p === '/api/me') return send(res, 200, { user: s.user, csrf: s.csrf, via: s.via || 'discord', diag: s.diag || null, guilds: s.guilds.map(g => Object.assign({ bot: inBot.has(g.id) }, g)), invite: 'https://discord.com/oauth2/authorize?client_id=' + CFG.app + '&scope=bot+applications.commands&permissions=1460557409286' });
+        if (p === '/api/me') return send(res, 200, { user: s.user, csrf: s.csrf, via: s.via || 'discord', diag: s.diag || null, guilds: s.guilds.map(g => Object.assign({ bot: inBot.has(g.id) }, g)), invite: 'https://discord.com/oauth2/authorize?client_id=' + CFG.app + '&scope=bot+applications.commands&permissions=1460577332246' });
         const m = /^\/api\/guild\/(\d{15,22})(?:\/(\w+))?$/.exec(p);
         if (!m) return send(res, 404, { error: 'Nicht gefunden' });
         const gid = m[1], act = m[2] || '';
         if (!s.guilds.some(g => g.id === gid) || !inBot.has(gid)) return send(res, 403, { error: 'Kein Zugriff auf diesen Server.' });
         try {
-            if (req.method === 'GET' && !act) { const mm = await meta(gid); return send(res, 200, Object.assign(overview(gid), { channels: mm.channels, roles: mm.roles })); }
+            if (req.method === 'GET' && !act) { const mm = await meta(gid); return send(res, 200, Object.assign(overview(gid), { channels: mm.channels, voice: mm.voice || [], roles: mm.roles,
+                music: music ? music.status(gid) : null, extras: extras ? extras.settingsOf(gid) : null })); }
+            if (req.method === 'GET' && act === 'music') return send(res, 200, music ? music.status(gid) : { enabled: false });   // Live-Stand (wird alle paar Sekunden abgefragt)
             if (req.method !== 'POST') return send(res, 405, { error: 'Methode nicht erlaubt' });
             if (req.headers['x-csrf'] !== s.csrf) return send(res, 403, { error: 'Sitzung abgelaufen – Seite neu laden.' });
             const b = await body(req), d = store.get(gid);
@@ -249,6 +252,31 @@ function createDashboard({ CFG, rest, store, log, botGuilds, oauthFetch }) {
                     if (b.all) { if (b.confirm !== 'ZURÜCKSETZEN') throw new Error('Bestätigung fehlt'); d.xp = {}; }
                     else { const id = String(b.user || ''); if (!/^\d{15,22}$/.test(id)) throw new Error('Ungültige ID'); delete d.xp[id]; }
                     store.save(gid); audit('XP zurückgesetzt'); return send(res, 200, { ok: true });
+                }
+                case 'music': {   // Musik steuern – wie die Knöpfe in Discord
+                    if (!music) throw new Error('Musik nicht verfügbar');
+                    const a = String(b.act || '');
+                    if (a === 'play') { const q = String(b.q || '').trim().slice(0, 300); if (!q) throw new Error('Suchbegriff fehlt'); const msg = await music.dashPlay(gid, s.user.id, q); audit('Musik: ' + q); return send(res, 200, { ok: true, msg, music: music.status(gid) }); }
+                    if (!['pause', 'skip', 'stop', 'leave', 'volume', 'loop', 'shuffle', 'remove', 'move', 'clear', 'seek', 'effect'].includes(a)) throw new Error('Unbekannte Musik-Aktion');
+                    const msg = await music.dashControl(gid, a, b.arg); audit('Musik ' + a);
+                    return send(res, 200, { ok: true, msg, music: music.status(gid) });
+                }
+                case 'music_cfg': {
+                    if (!music) throw new Error('Musik nicht verfügbar');
+                    const c = (d.music = Object.assign({ dj: '', volume: 80, stay: false, announce: true, channel: '' }, d.music || {})), id = x => (/^\d{15,22}$/.test(String(x || '')) ? String(x) : '');
+                    if ('dj' in b) c.dj = id(b.dj);
+                    if ('channel' in b) c.channel = id(b.channel);
+                    if ('volume' in b) c.volume = Math.max(1, Math.min(150, Math.round(Number(b.volume)) || 80));
+                    if ('stay' in b) c.stay = !!b.stay;
+                    if ('announce' in b) c.announce = !!b.announce;
+                    store.save(gid); audit('Musik-Einstellungen'); return send(res, 200, { ok: true, music: music.status(gid) });
+                }
+                case 'extras': {
+                    if (!extras) throw new Error('Extras nicht verfügbar');
+                    const mm = await meta(gid), known = new Set(mm.channels.map(x => x.id)), vknown = new Set((mm.voice || []).map(x => x.id));
+                    for (const k of ['suggest', 'star']) if (b[k] && !known.has(String(b[k]))) throw new Error('Unbekannter Kanal');
+                    if (b.tempHub && !vknown.has(String(b.tempHub))) throw new Error('Unbekannter Sprachkanal');
+                    const c = extras.saveSettings(gid, b); audit('Extras'); return send(res, 200, { ok: true, extras: c });
                 }
                 case 'test': {   // Probe-Nachricht in einen Kanal (z. B. Begrüßung testen)
                     const mm = await meta(gid), ch = String(b.channel || '');
