@@ -30,7 +30,12 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           mkdir -p dist
-          zip -q -X dist/ghostnode-discord-bot.zip bot.js features.js store.js dashboard.js dashboard.html package.json README.md ghostnode-bot.service
+          # alle Programmdateien (*.js im Hauptordner) – vorher fehlte clubs.js, der Bot startete aus der ZIP nicht
+          zip -q -X dist/ghostnode-discord-bot.zip ./*.js dashboard.html package.json README.md ghostnode-bot.service
+          # Prüfung: jede lokal geladene Datei (require('./…')) steckt in der ZIP
+          for m in $(grep -ho "require('\./[a-z0-9-]*')" ./*.js | sed "s/require('\.\/\(.*\)')/\1/" | sort -u); do
+            unzip -l dist/ghostnode-discord-bot.zip | grep -q " $m.js$" || { echo "::error::$m.js fehlt in der ZIP"; exit 1; }
+          done
           cp dist/ghostnode-discord-bot.zip "dist/ghostnode-discord-bot-$VERSION.zip"
           unzip -l dist/ghostnode-discord-bot.zip
       - name: Release veröffentlichen
