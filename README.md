@@ -111,3 +111,8 @@ The image is Node.js 22, and no npm packages are installed. The console shows `W
 - **„Es fehlen: DISCORD_TOKEN …“** – open `/health`: it lists which variable *names* the bot sees. Save the variables/secrets in *Node.js → Environment*, then **Restart App**. Do not start the bot via *Run Node.js commands* (`npm start` there gets no app environment). Last resort: a `.env` file next to `bot.js` with `KEY=value` lines (never commit it).
 - **Browser shows a certificate error** – issue a Let's Encrypt certificate for the subdomain.
 - **Bot goes offline after a few minutes / is slow** – Plesk stops idle apps. With `DASHBOARD_URL` set, the bot pings its own `/health` every minute through the public address and stays awake (disable with `KEEPALIVE=0`). If your hoster allows custom nginx directives, the two `passenger_…` lines above are the cleaner fix; a Plesk *Scheduled task → Fetch URL* every minute also works.
+- **Dashboard says „Keine Server gefunden“** – the dashboard now asks Discord directly which servers the bot is on (not only the gateway cache, which is empty right after a restart) and explains the reason under the message:
+  - *bot on no server* → invite it with the button,
+  - *your Discord account is not a member* → check which Discord account is linked on the GhostNode website (Mein Bereich),
+  - *no "Manage Server" right* → you need "Manage Server", "Administrator" or be the owner.
+  After inviting the bot or changing roles, click **⟳ Server neu prüfen** – no new sign-in needed.

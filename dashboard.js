@@ -119,18 +119,48 @@ function createDashboard({ CFG, rest, store, log, botGuilds, oauthFetch }) {
         used.set(d.j, d.e);
         return d;
     }
-    /** Server, auf denen der Bot ist und die Person Inhaber ist, Administrator oder „Server verwalten“ hat – geprüft mit dem Bot-Token */
-    async function manageable(uid) {
-        const out = [];
-        await Promise.all(botGuilds().slice(0, 100).map(async gid => {
+    /**
+     * Server des Bots: aus dem Gateway-Speicher UND direkt von Discord (GET /users/@me/guilds mit dem Bot-Token).
+     * Ist der Speicher leer (z. B. nach einem Neustart, bevor GUILD_CREATE kam), fehlen sonst alle Server im Dashboard.
+     */
+    let restGuilds = { at: 0, ids: [] };
+    async function allBotGuilds(force) {
+        if (force || Date.now() - restGuilds.at > 60000) {
             try {
-                const [g, mem] = await Promise.all([rest('GET', '/guilds/' + gid), rest('GET', '/guilds/' + gid + '/members/' + uid)]);
+                const ids = [];
+                let after = '0';
+                for (let i = 0; i < 5; i++) {
+                    const page = await rest('GET', '/users/@me/guilds?limit=200&after=' + after);
+                    if (!Array.isArray(page) || !page.length) break;
+                    for (const g of page) {
+                        ids.push(String(g.id));
+                        const d = store.get(String(g.id));   // Speicher nachziehen, damit auch die übrigen Bot-Funktionen den Server kennen
+                        if (!d.meta.name || d.meta.left) { d.meta.name = g.name; d.meta.left = false; store.save(String(g.id)); }
+                    }
+                    if (page.length < 200) break;
+                    after = String(page[page.length - 1].id);
+                }
+                restGuilds = { at: Date.now(), ids };
+            } catch (e) { log('Dashboard: Server-Liste von Discord nicht lesbar:', e.message); }
+        }
+        return [...new Set([...botGuilds(), ...restGuilds.ids])];
+    }
+    /** Server, auf denen der Bot ist und die Person Inhaber ist, Administrator oder „Server verwalten“ hat – geprüft mit dem Bot-Token */
+    async function manageable(uid, diag = {}) {
+        const out = [];
+        const ids = await allBotGuilds(true);
+        Object.assign(diag, { bot: ids.length, member: 0, noRight: 0, at: Date.now() });
+        await Promise.all(ids.slice(0, 100).map(async gid => {
+            try {
+                const [g, mem] = await Promise.all([rest('GET', '/guilds/' + gid), rest('GET', '/guilds/' + gid + '/members/' + uid).catch(() => null)]);
                 if (!g || !mem) return;
+                diag.member++;
                 let perm = 0n;
                 const roles = new Map((g.roles || []).map(r => [r.id, BigInt(r.permissions || 0)]));
                 perm |= roles.get(gid) || 0n;   // @everyone
                 for (const r of mem.roles || []) perm |= roles.get(r) || 0n;
                 if (g.owner_id === uid || (perm & ADMIN) === ADMIN || (perm & MANAGE) === MANAGE) out.push({ id: gid, name: g.name, icon: g.icon || null });
+                else diag.noRight++;
             } catch (e) { /* nicht Mitglied oder kein Zugriff */ }
         }));
         return out.sort((a, b) => a.name.localeCompare(b.name));
@@ -139,10 +169,10 @@ function createDashboard({ CFG, rest, store, log, botGuilds, oauthFetch }) {
         if (!sso) return send(res, 404, 'Anmeldung über GhostNode ist nicht eingerichtet (BOT_SSO_SECRET fehlt).', 'text/plain; charset=utf-8');
         let d;
         try { d = ticket(t); } catch (e) { log('Dashboard-SSO:', e.message); return send(res, 400, e.message + '.', 'text/plain; charset=utf-8'); }
-        const uid = String(d.d), guilds = await manageable(uid);
+        const uid = String(d.d), diag = {}, guilds = await manageable(uid, diag);
         const sid = crypto.randomBytes(32).toString('hex');
         sessions.set(sid, { user: { id: uid, name: String(d.n || 'GhostNode').slice(0, 64), avatar: /^(a_)?[0-9a-f]{32}$/.test(String(d.a || '')) ? d.a : null },
-            guilds, via: 'ghostnode', csrf: crypto.randomBytes(16).toString('hex'), exp: Date.now() + SESSION_MS });
+            guilds, diag, via: 'ghostnode', csrf: crypto.randomBytes(16).toString('hex'), exp: Date.now() + SESSION_MS });
         log('Dashboard-Anmeldung über GhostNode:', uid, '·', guilds.length, 'Server');
         res.writeHead(302, { Location: '/', 'Set-Cookie': 'gnsid=' + sid + '; Path=/; HttpOnly' + sec(req) + '; SameSite=Lax; Max-Age=' + SESSION_MS / 1000 }); return res.end();
     }
@@ -185,8 +215,16 @@ function createDashboard({ CFG, rest, store, log, botGuilds, oauthFetch }) {
         if (!p.startsWith('/api/')) return send(res, 404, { error: 'Nicht gefunden' });
         const s = session(req);
         if (!s) return send(res, 401, { error: 'Bitte anmelden.', login: loginReady(), via: sso ? 'ghostnode' : 'discord' });
-        const inBot = new Set(botGuilds());
-        if (p === '/api/me') return send(res, 200, { user: s.user, csrf: s.csrf, guilds: s.guilds.map(g => Object.assign({ bot: inBot.has(g.id) }, g)), invite: 'https://discord.com/oauth2/authorize?client_id=' + CFG.app + '&scope=bot+applications.commands&permissions=1460557409286' });
+        const inBot = new Set(await allBotGuilds(false));
+        // Server-Liste neu prüfen (z. B. nachdem der Bot eingeladen oder eine Rolle vergeben wurde) – ohne neu anzumelden
+        if (p === '/api/refresh' && req.method === 'POST') {
+            if (req.headers['x-csrf'] !== s.csrf) return send(res, 403, { error: 'Sitzung abgelaufen – Seite neu laden.' });
+            if (s.via === 'ghostnode') { s.diag = {}; s.guilds = await manageable(s.user.id, s.diag); }
+            else { await allBotGuilds(true); }
+            const nb = new Set(await allBotGuilds(false));
+            return send(res, 200, { guilds: s.guilds.map(g => Object.assign({ bot: nb.has(g.id) }, g)), diag: s.diag || null });
+        }
+        if (p === '/api/me') return send(res, 200, { user: s.user, csrf: s.csrf, via: s.via || 'discord', diag: s.diag || null, guilds: s.guilds.map(g => Object.assign({ bot: inBot.has(g.id) }, g)), invite: 'https://discord.com/oauth2/authorize?client_id=' + CFG.app + '&scope=bot+applications.commands&permissions=1460557409286' });
         const m = /^\/api\/guild\/(\d{15,22})(?:\/(\w+))?$/.exec(p);
         if (!m) return send(res, 404, { error: 'Nicht gefunden' });
         const gid = m[1], act = m[2] || '';

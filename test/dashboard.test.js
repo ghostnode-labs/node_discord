@@ -123,3 +123,39 @@ test('Dashboard – Anmeldung über das GhostNode-Dashboard (signiertes Ticket, 
         r = await go('/sso?t=' + mk({}), { headers: { 'x-forwarded-proto': 'https' } }); assert.match(r.headers.get('set-cookie'), /; Secure;/, 'hinter https mit Secure');
     } finally { srv.close(); delete process.env.BOT_SSO_SECRET; }
 });
+
+test('Dashboard: leerer Gateway-Speicher – Server kommen direkt von Discord, Hinweis + Neu prüfen', async () => {
+    const SECRET = 'z'.repeat(48), crypto = require('crypto');
+    process.env.BOT_SSO_SECRET = SECRET;
+    const store = new Store(fs.mkdtempSync(path.join(os.tmpdir(), 'gn-rg-')));
+    const G = '444444444444444444', G2 = '555555555555555555', U = '700000000000000009';
+    let botIn = [{ id: G2, name: 'Zweiter' }];
+    let member = false;
+    const guilds = { [G]: { id: G, name: 'Haupt', owner_id: U, roles: [{ id: G, permissions: '0' }] }, [G2]: { id: G2, name: 'Zweiter', owner_id: '1', roles: [{ id: G2, permissions: '0' }] } };
+    const rest = async (m, route) => {
+        if (route.startsWith('/users/@me/guilds')) return route.includes('after=0') ? botIn : [];
+        let x = /^\/guilds\/(\d+)$/.exec(route); if (x) return guilds[x[1]];
+        x = /^\/guilds\/(\d+)\/members\/(\d+)$/.exec(route);
+        if (x) { if (x[1] === G || member) return { roles: [] }; throw new Error('Discord GET: HTTP 404'); }
+        return [];
+    };
+    const dash = createDashboard({ CFG: { app: '123', api: 'https://discord.com/api/v10', nexus: 'https://site.example' }, rest, store, log: () => {}, botGuilds: () => [] });
+    const srv = http.createServer((q, s) => dash.handle(q, s)); await new Promise(r => srv.listen(0, '127.0.0.1', r));
+    const B = 'http://127.0.0.1:' + srv.address().port;
+    const go = (p, o = {}) => fetch(B + p, Object.assign({ redirect: 'manual' }, o));
+    const mk = o => { const p = Buffer.from(JSON.stringify(Object.assign({ v: 1, d: U, n: 'Luna', a: null, e: Math.floor(Date.now() / 1000) + 60, j: crypto.randomBytes(16).toString('hex') }, o))).toString('base64url');
+        return p + '.' + crypto.createHmac('sha256', SECRET).update(p).digest('base64url'); };
+    try {
+        const cookie = 'gnsid=' + /gnsid=([0-9a-f]+)/.exec((await go('/sso?t=' + mk({}))).headers.get('set-cookie'))[1];
+        let me = await (await go('/api/me', { headers: { cookie } })).json();
+        assert.deepStrictEqual(me.guilds, [], 'Bot nur auf einem Server ohne die Person');
+        assert.deepStrictEqual([me.diag.bot, me.diag.member], [1, 0], 'Hinweis: Bot auf 1 Server, Person dort kein Mitglied');
+        assert.strictEqual(store.get(G2).meta.name, 'Zweiter', 'Speicher wird nachgezogen');
+        // Bot wird auf den eigenen Server eingeladen → „Neu prüfen“ ohne neue Anmeldung
+        botIn = [{ id: G, name: 'Haupt' }, { id: G2, name: 'Zweiter' }];
+        assert.strictEqual((await go('/api/refresh', { method: 'POST', headers: { cookie } })).status, 403, 'ohne CSRF nicht');
+        const r = await (await go('/api/refresh', { method: 'POST', headers: { cookie, 'x-csrf': me.csrf, 'content-type': 'application/json' }, body: '{}' })).json();
+        assert.deepStrictEqual(r.guilds.map(g => [g.id, g.bot]), [[G, true]], 'Inhaber sieht den Server jetzt');
+        assert.strictEqual((await go('/api/guild/' + G, { headers: { cookie } })).status, 200);
+    } finally { srv.close(); delete process.env.BOT_SSO_SECRET; }
+});

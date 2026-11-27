@@ -78,7 +78,21 @@ function pick() {
     app.innerHTML = '<h2>Wähle einen Server</h2><p class="muted">Du siehst Server, auf denen du „Server verwalten“ darfst.</p><div class="grid">'
         + on.map(g => '<div class="gcard" data-g="' + g.id + '"><div class="gicon">' + icon(g) + '</div><div><b>' + esc(g.name) + '</b><div class="muted">Einstellungen öffnen →</div></div></div>').join('') + '</div>'
         + (off.length ? '<h3 style="margin-top:28px">Ohne GhostNode Bot</h3><div class="grid">' + off.map(g => '<a class="gcard" style="text-decoration:none;color:inherit" target="_blank" rel="noopener" href="' + esc(me.invite) + '&guild_id=' + g.id + '"><div class="gicon">' + icon(g) + '</div><div><b>' + esc(g.name) + '</b><div class="muted">Bot einladen ↗</div></div></a>').join('') + '</div>' : '')
-        + (!me.guilds.length ? '<p>Keine Server gefunden, auf denen du verwalten darfst.</p>' : '');
+        + (!me.guilds.length ? emptyHelp() : '<p style="margin-top:18px"><button class="btn sm" id="refreshG">⟳ Server neu prüfen</button></p>');
+    const rb = document.getElementById('refreshG');
+    if (rb) rb.onclick = async () => { rb.disabled = true; rb.textContent = 'Prüfe …'; try { const r = await api('/refresh', {}); me.guilds = r.guilds; me.diag = r.diag; pick(); } catch (e) { toast(e.message, true); rb.disabled = false; rb.textContent = '⟳ Server neu prüfen'; } };
+}
+/** Leere Liste: sagen, woran es liegt, und was man tun kann */
+function emptyHelp() {
+    const d = me.diag;
+    let why = '';
+    if (d && me.via === 'ghostnode') {
+        if (!d.bot) why = 'Der GhostNode Bot ist gerade auf <b>keinem</b> Server (oder die Server-Liste war bei Discord nicht abrufbar).';
+        else if (!d.member) why = 'Der Bot ist auf ' + d.bot + ' Server' + (d.bot === 1 ? '' : 'n') + ', aber dein verknüpftes Discord-Konto ist auf keinem davon Mitglied. Ist auf der Website das richtige Discord-Konto verknüpft?';
+        else why = 'Du bist auf ' + d.member + ' Server' + (d.member === 1 ? '' : 'n') + ' mit dem Bot, hast dort aber weder „Server verwalten“ noch „Administrator“ (und bist nicht Inhaber).';
+    } else why = 'Discord hat keinen Server gemeldet, auf dem du „Server verwalten“ hast.';
+    return '<div class="card" style="margin-top:10px"><p><b>Keine Server gefunden, auf denen du verwalten darfst.</b></p><p class="muted">' + why + '</p>'
+        + '<p><a class="btn" target="_blank" rel="noopener" href="' + esc(me.invite) + '">➕ Bot auf einen Server einladen</a> <button class="btn sm" id="refreshG">⟳ Server neu prüfen</button></p></div>';
 }
 async function openGuild(id, t) {
     gid = id; tab = t || 'overview'; app.innerHTML = '<p class="muted">Lade Server …</p>';
