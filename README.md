@@ -136,6 +136,10 @@ The image is Node.js 22, and no npm packages are installed. The console shows `W
   - *no "Manage Server" right* → you need "Manage Server", "Administrator" or be the owner.
   After inviting the bot or changing roles, click **⟳ Server neu prüfen** – no new sign-in needed.
 
+### New in 2.6.1
+
+- Dashboard uses the full width; card grids stack without gaps (masonry).
+
 ### New in 2.6.0
 
 - Music: if YouTube refuses a track through Lavalink, the bot now asks **yt-dlp** for the audio stream address and plays it through Lavalink (streaming only, nothing is saved); the title stays the same. Only if that fails too, the SoundCloud fallback from 2.5.1 is used. Set up automatically by the root script (`ghostnode update` / `ghostnode bot`: installs yt-dlp and ffmpeg and keeps yt-dlp up to date). Optional cookies of a secondary Google account: put them as `/etc/ghostnode/yt-cookies.txt` (Netscape format) on the server and run `ghostnode bot`.
