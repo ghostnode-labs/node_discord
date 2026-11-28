@@ -18,7 +18,7 @@ header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;
 .btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(243,194,98,.12)}.btn.gold:hover{background:var(--gold);color:var(--bg);box-shadow:0 0 14px var(--gold)}
 .btn.red{border-color:var(--red);color:var(--red);background:rgba(255,92,108,.1)}.btn.red:hover{background:var(--red);color:var(--bg);box-shadow:0 0 14px var(--red)}
 .btn.sm{padding:5px 11px;font-size:.7rem}.btn.ic{padding:8px 12px;font-size:1rem;letter-spacing:0}.btn.on{background:var(--cyan);color:var(--bg)}
-main{max-width:1240px;margin:0 auto;padding:24px 20px 70px}
+main{margin:0;padding:24px 20px 70px}
 .hero{text-align:center;padding:80px 10px}.hero h1{font-size:clamp(2rem,6vw,3.4rem);letter-spacing:8px;color:var(--gold);margin:.2em 0;text-shadow:0 0 24px rgba(243,194,98,.3)}
 .hero p{color:var(--muted);max-width:640px;margin:0 auto 26px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
@@ -44,6 +44,9 @@ textarea{min-height:80px;resize:vertical}
 .stat{background:var(--panel2);border:1px solid var(--line);padding:12px 14px;clip-path:var(--cut-sm)}.stat b{display:block;font-size:1.7rem;color:var(--gold);text-shadow:0 0 12px rgba(243,194,98,.25)}.stat span{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
 table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{padding:8px;border-bottom:1px solid rgba(56,213,230,.12);text-align:left}th{color:var(--muted);font-weight:600;font-size:.7rem;text-transform:uppercase;letter-spacing:1px}tr:hover td{background:rgba(56,213,230,.03)}
 .save{position:sticky;bottom:12px;display:flex;justify-content:flex-end;margin-top:10px}
+/* Reiter-Inhalt: Karten nebeneinander, sobald Platz ist (Mauerwerk per Skript unten); Speichern-Leiste u. a. über die volle Breite */
+#pane{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(560px,100%),1fr));column-gap:16px;align-content:start;min-width:0}#pane>:not(.card){grid-column:1/-1}
+.nxm-on{grid-auto-rows:4px!important;row-gap:0!important;align-items:start!important}.nxm-on>*{align-self:start!important}.nxm-on.nxm-dense{grid-auto-flow:row dense!important}
 .toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);padding:11px 18px;background:var(--panel2);border:1px solid var(--cyan);z-index:9;clip-path:var(--cut-sm);box-shadow:0 0 18px var(--glow)}
 .toast.bad{border-color:var(--red)}.hint{font-size:.8rem;color:var(--muted)}
 /* Musik */
@@ -227,9 +230,9 @@ function extrasPane() {
         + '<div class="card"><h2>🔊 Eigene Sprachkanäle</h2><p class="muted">Wer den „Erstellen“-Kanal betritt, bekommt einen eigenen Sprachkanal (mit Verwalten-Recht). Leer = wird automatisch gelöscht.</p><div class="row">'
         + '<label class="f"><span>„➕ Kanal erstellen“ (Sprachkanal)</span>' + chSelId('xHub', x.tempHub, G.voice || [], '🔊 ') + '</label><label class="f"><span>Name ({name} = Mitglied)</span><input type="text" id="xTempName" maxlength="80" value="' + esc(x.tempName || '🔊 {name}') + '"></label>'
         + '<label class="f"><span>Personen-Limit (0 = keins)</span><input type="number" id="xTempLimit" min="0" max="99" value="' + esc(x.tempLimit || 0) + '"></label></div></div>'
-        + '<div class="save" style="position:static;margin:-6px 0 16px"><button class="btn gold" data-xsave>💾 Speichern</button></div>'
         + '<div class="card"><h2>🧰 Weitere Befehle</h2><table>' + [['/info server · /info nutzer', 'Server- und Mitglieder-Infos'], ['/avatar', 'Profilbild groß'], ['/erinnerung neu · liste', 'Erinnerungen (z. B. „in 2h“), Zustellung im Kanal'],
             ['/8ball · /auswahl · /zufall', 'Spaß: magische Kugel, Bot entscheidet, Zufallszahl'], ['/play · /musik …', 'Musik (siehe Tab „Musik“)']].map(([a, b]) => '<tr><td><b>' + a + '</b></td><td class="muted">' + b + '</td></tr>').join('') + '</table></div>'
+        + '<div class="save" style="position:static;margin:0 0 16px"><button class="btn gold" data-xsave>💾 Speichern</button></div>'
         ;
 }
 const chName = id => '#' + ((G.channels.find(c => c.id === id) || { name: 'unbekannt' }).name);
@@ -282,6 +285,90 @@ document.addEventListener('change', e => {
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'muQ') { const b = $('[data-muplay]'); if (b) b.click(); } });
 window.addEventListener('hashchange', () => { const h = location.hash.slice(1).split('/'); if (h[0] && h[0] !== gid && me) openGuild(h[0], h[1]); });
 boot();
+})();
+</script>
+<script>
+// Mauerwerk-Raster (Masonry) für die Karten im Reiter-Inhalt
+(function () {
+    if (!('ResizeObserver' in window) || !('MutationObserver' in window)) return;
+    var CONTAINERS = '#pane', CARDS = '', SKIP = '';
+    /*
+     * Mauerwerk-Raster (Masonry) – eigene kleine Umsetzung ohne Abhängigkeit.
+     * Karten-Raster mit mehreren Spalten strecken bei CSS-Grid jede Zeile auf die höchste Karte → große Lücken
+     * unter kürzeren Karten. Hier bekommt das Raster feine Zeilen (4 px, Klasse „nxm-on“), und jede Karte
+     * belegt per grid-row-end: span N genau so viele Zeilen, wie sie hoch ist. Karten rutschen dadurch in jeder
+     * Spalte nach oben; die Reihenfolge bleibt – nur wenn eine Karte über mehrere Spalten geht, dürfen
+     * spätere Karten die Lücke darüber füllen („dense“), sonst bliebe dort Leerraum.
+     * Einspaltig (Handy) wird nichts verändert. Elemente mit grid-column: 1 / -1 bleiben volle Breite.
+     */
+    var ROW = 4, ON = 'nxm-on';
+    var BOXES = [CONTAINERS, '.nx-masonry'].filter(Boolean).join(',');
+    var known = new Set(), gaps = new WeakMap(), touched = new WeakSet(), seen = new WeakSet();
+    var dirty = new Set(), full = false, raf = 0;
+    var tracks = function (cs) { return cs.gridTemplateColumns.replace(/\[[^\]]*\]/g, ' ').trim().split(/\s+/).filter(function (t) { return parseFloat(t) > 0; }).length; };
+    var skip = function (el) { return SKIP && el.matches(SKIP); };
+    function off(c) {
+        if (!c.classList.contains(ON)) return;
+        c.classList.remove(ON, 'nxm-dense');
+        for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (touched.has(k)) { k.style.gridRowEnd = ''; touched.delete(k); } }
+    }
+    function layout(c) {
+        if (!c.isConnected) { known.delete(c); return; }
+        if (!c.getClientRects().length) return;                       // versteckt – später, wenn sichtbar (ResizeObserver)
+        var cs = getComputedStyle(c);
+        if (!/grid/.test(cs.display) || /column/.test(cs.gridAutoFlow)) { off(c); return; }
+        if (tracks(cs) < 2 || c.children.length < 2) { off(c); return; }
+        if (!c.classList.contains(ON)) { gaps.set(c, parseFloat(cs.rowGap) || 0); c.classList.add(ON); }
+        var gap = gaps.get(c) || 0, list = [], wide = false, i, k, kc, tw = parseFloat(cs.gridTemplateColumns.replace(/\[[^\]]*\]/g, ' ').trim()) || 1e9;
+        for (i = 0; i < c.children.length; i++) {
+            k = c.children[i];
+            if (!seen.has(k)) { seen.add(k); ro.observe(k); }
+            if (!k.getClientRects().length) continue;                 // ausgeblendet
+            kc = getComputedStyle(k);
+            if (kc.position === 'absolute' || kc.position === 'fixed') continue;
+            if (!touched.has(k) && (k.style.gridRow || kc.gridRowStart !== 'auto' || kc.gridRowEnd !== 'auto')) continue;   // feste Zeile vom Layout – nicht anfassen
+            var kr = k.getBoundingClientRect();
+            if (kr.width > tw * 1.5) wide = true;                       // Karte über mehrere Spalten
+            list.push([k, kr.height + (parseFloat(kc.marginTop) || 0) + (parseFloat(kc.marginBottom) || 0)]);
+        }
+        // Karten über mehrere Spalten (z. B. grid-column: 1 / -1) würden über sich Lücken lassen → spätere Karten dürfen sie füllen
+        if (c.classList.contains('nxm-dense') !== wide) c.classList.toggle('nxm-dense', wide);
+        for (i = 0; i < list.length; i++) {                           // erst alles messen, dann schreiben (kein Layout-Flattern)
+            var cur = parseInt(String(list[i][0].style.gridRowEnd).replace('span ', ''), 10) || 0;
+            if (cur && Math.abs(list[i][1] - cur * ROW) < 0.5) continue;  // füllt genau ihre Fläche (height: 100 %) → nicht hochschaukeln
+            var v = 'span ' + Math.max(1, Math.ceil((list[i][1] + gap) / ROW));
+            if (list[i][0].style.gridRowEnd !== v) list[i][0].style.gridRowEnd = v;
+            touched.add(list[i][0]);
+        }
+    }
+    function scan() {
+        var found = new Set(), i, l;
+        if (BOXES) { l = document.querySelectorAll(BOXES); for (i = 0; i < l.length; i++) found.add(l[i]); }
+        if (CARDS) { l = document.querySelectorAll(CARDS); for (i = 0; i < l.length; i++) if (l[i].parentElement) found.add(l[i].parentElement); }
+        found.forEach(function (c) {
+            if (known.has(c) || skip(c)) return;
+            if (CARDS && !(BOXES && c.matches(BOXES)) && !/grid/.test(getComputedStyle(c).display)) return;
+            known.add(c); ro.observe(c);
+        });
+        known.forEach(function (c) { dirty.add(c); });
+    }
+    function run() {
+        raf = 0;
+        if (full) { full = false; scan(); }
+        var l = Array.from(dirty); dirty.clear();
+        for (var i = 0; i < l.length; i++) layout(l[i]);
+    }
+    function queue(c) { if (c) dirty.add(c); else full = true; if (!raf) raf = requestAnimationFrame(run); }
+    var ro = new ResizeObserver(function (es) {
+        for (var i = 0; i < es.length; i++) { var t = es[i].target; queue(known.has(t) ? t : (t.parentElement && known.has(t.parentElement) ? t.parentElement : null)); }
+    });
+    new MutationObserver(function (ms) {
+        for (var i = 0; i < ms.length; i++) { var m = ms[i]; if (m.type === 'childList' || !(m.target.classList && m.target.classList.contains(ON) && m.attributeName === 'class')) { queue(); return; } }
+    }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'hidden', 'open'] });
+    window.addEventListener('load', function () { queue(); });
+    /** von außen: Raster sofort neu berechnen (z. B. nach eigenem Umsortieren) */
+    window.nxMasonry = { refresh: function () { queue(); }, ROW: ROW };
+    queue();
 })();
 </script>
 </body>
