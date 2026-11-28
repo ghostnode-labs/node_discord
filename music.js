@@ -8,6 +8,24 @@
  * core = { rest, log, store, voice(gid, channelId|null), botId(), url, password, search }
  */
 const COLOR = 0x38d5e6, GOLD = 0xf3c262;
+const { execFile } = require('child_process');
+/** yt-dlp: nur die direkte Audio-Adresse holen (Streamen über Lavalink, es wird nichts gespeichert). bin/cookies kommen aus der Umgebung. */
+function ytdlpResolver(bin, cookies) {
+    if (!bin) return null;
+    return url => new Promise((res, rej) => {
+        if (!/^https:\/\/(www\.|m\.|music\.)?(youtube\.com|youtu\.be)\//i.test(url)) return rej(new Error('Keine YouTube-Adresse.'));
+        const args = ['--no-playlist', '--no-cache-dir', '--no-warnings', '--no-progress', '-f', 'bestaudio[ext=webm]/bestaudio[ext=m4a]/bestaudio',
+            '--print', 'urls', '--print', 'title', '--print', 'uploader', '--print', 'duration'];
+        if (cookies) args.push('--cookies', cookies);
+        args.push('--', url);
+        execFile(bin, args, { timeout: 30000, maxBuffer: 1 << 20, env: Object.assign({}, process.env, { HOME: process.env.BOT_DATA || process.env.HOME || '/tmp' }) }, (e, out, err) => {
+            if (e) return rej(new Error(String(err || e.message).split('\n').find(x => /ERROR/.test(x)) || 'yt-dlp fehlgeschlagen'));
+            const [u, title, author, dur] = String(out).trim().split('\n');
+            if (!/^https:\/\//.test(u || '')) return rej(new Error('yt-dlp lieferte keine Adresse.'));
+            res({ url: u, title: title || '', author: author || '', length: Math.round(Number(dur) * 1000) || 0 });
+        });
+    });
+}
 const O = { SUB: 1, STR: 3, INT: 4, BOOL: 5 };
 const opt = (type, name, description, required = false, extra = {}) => Object.assign({ type, name, description, required }, extra);
 const sub = (name, description, options = []) => ({ type: O.SUB, name, description, options });
@@ -52,6 +70,7 @@ const bar = (pos, len, n = 18) => { if (!len || len > 1e12) return '🔴 LIVE'; 
 
 function create(core) {
     const { rest, log, store } = core;
+    const ytdlp = core.ytdlp || ytdlpResolver(core.ytdlpBin, core.ytdlpCookies);
     const base = String(core.url || '').replace(/\/+$/, '');
     const enabled = () => !!(base && core.password);
     const S = new Map();   // guildId → Zustand
@@ -129,12 +148,22 @@ function create(core) {
     }
     async function failed(s) {
         const prev = s.cur, err = s.lastErr || ''; s.lastErr = '';
-        if (prev && !prev.alt && prev.src === 'youtube' && prev.title) {
+        if (prev && !prev.alt && prev.src === 'youtube' && prev.uri && ytdlp) {
+            const y = await ytdlp(prev.uri).catch(e => { log('yt-dlp:', e.message); return null; });
+            const r = y && await ll('GET', '/loadtracks?identifier=' + encodeURIComponent(y.url)).catch(() => null);
+            const t = r && r.loadType === 'track' && r.data;
+            if (t) {
+                s.queue.unshift(Object.assign({}, prev, { encoded: t.encoded, src: 'youtube (yt-dlp)', alt: true, viaYtdlp: true, seek: !!t.info.isSeekable }));
+                if (!s.ytNote && s.text) { s.ytNote = true; send(s.text, { content: '↪ ' + shortErr(err) + ' – ich spiele YouTube-Titel jetzt über yt-dlp.' }); }
+                return next(s, true);
+            }
+        }
+        if (prev && !(prev.alt && !prev.viaYtdlp) && /^youtube/.test(prev.src) && prev.title) {
             const q = (prev.author && !/ - Topic$/.test(prev.author) ? prev.author + ' ' : prev.author ? prev.author.replace(/ - Topic$/, '') + ' ' : '') + prev.title;
             const r = await ll('GET', '/loadtracks?identifier=' + encodeURIComponent('scsearch:' + cut(q, 150))).catch(() => null);
             const t = r && r.loadType === 'search' && r.data && r.data[0];
             if (t) {
-                const alt = { encoded: t.encoded, title: cut(t.info.title, 200), author: cut(t.info.author, 100), length: t.info.isStream ? 0 : t.info.length, uri: t.info.uri || '', art: t.info.artworkUrl || '', src: t.info.sourceName || 'soundcloud', seek: !!t.info.isSeekable, by: prev.by, alt: true };
+                const alt = { encoded: t.encoded, title: cut(t.info.title, 200), author: cut(t.info.author, 100), length: t.info.isStream ? 0 : t.info.length, uri: t.info.uri || '', art: t.info.artworkUrl || '', src: t.info.sourceName || 'soundcloud', seek: !!t.info.isSeekable, by: prev.by, alt: true, viaSc: true };
                 s.queue.unshift(alt);
                 if (!s.altNote && s.text) { s.altNote = true; send(s.text, { content: '↪ ' + shortErr(err) + ' – ich spiele solche Titel ersatzweise über SoundCloud.' }); }
                 return next(s, true);
@@ -415,10 +444,10 @@ function create(core) {
     async function dashControl(gid, act, arg) { const s = st(gid); const m = await control(gid, act, arg); refreshNp(s); return m; }
 
     function stop() { stopped = true; try { if (ws) ws.close(1000); } catch (e) { /* egal */ } }
-    function health() { return { enabled: enabled(), online: wsOk, players: stats ? stats.players : 0, playing: stats ? stats.playing : 0 }; }
+    function health() { return { enabled: enabled(), online: wsOk, players: stats ? stats.players : 0, playing: stats ? stats.playing : 0, ytdlp: !!ytdlp }; }
 
     return { COMMANDS, H, EPH, onComponent, onVoiceState, onVoiceServer, onGuild, connect, stop, status, dashPlay, dashControl, health, EFFECTS,
         _test: { st, onLL, resolve, fmt, parseTime, setSid: v => { sid = v; } } };
 }
 
-module.exports = { create, EFFECTS, fmt, parseTime };
+module.exports = { ytdlpResolver, create, EFFECTS, fmt, parseTime };

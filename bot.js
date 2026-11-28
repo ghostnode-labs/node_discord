@@ -71,7 +71,7 @@ COMMANDS.push(...C.COMMANDS); Object.assign(F.H, C.H); F.EPH.add('club');
 // Musik über Lavalink (eigener Dienst; ohne LAVALINK_URL/LAVALINK_PASSWORD sagen die Befehle, dass Musik nicht eingerichtet ist)
 let GW = null;
 const M = require('./music').create({ rest: (...a) => rest(...a), log: (...a) => log(...a), store, botId: () => BOT_ID,
-    url: env('LAVALINK_URL'), password: env('LAVALINK_PASSWORD'), search: env('MUSIC_SEARCH', 'ytsearch'),
+    url: env('LAVALINK_URL'), password: env('LAVALINK_PASSWORD'), search: env('MUSIC_SEARCH', 'ytsearch'), ytdlpBin: env('YTDLP'), ytdlpCookies: env('YTDLP_COOKIES'),
     voice: (gid, ch) => { if (GW) GW.send(4, { guild_id: gid, channel_id: ch, self_mute: false, self_deaf: true }); } });
 COMMANDS.push(...M.COMMANDS); Object.assign(F.H, M.H); for (const n of M.EPH) F.EPH.add(n);
 // Extras: Info, Erinnerungen, Vorschläge, Starboard, Temp-Sprachkanäle, Spaß

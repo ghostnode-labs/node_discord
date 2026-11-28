@@ -16,6 +16,7 @@ function fakeLavalink() {
         const u = new URL(q.url, 'http://x');
         if (u.pathname === '/v4/loadtracks') {
             const id = u.searchParams.get('identifier');
+            if (id.startsWith('https://rr.googlevideo.test/')) return json(s, { loadType: 'track', data: { encoded: 'YT1', info: { title: 'videoplayback', author: 'unknown', length: 180000, uri: id, isSeekable: true, isStream: false, sourceName: 'http' } } });
             if (id.startsWith('scsearch:') && id.includes('Lofi Beats')) return json(s, { loadType: 'search', data: [{ encoded: 'SC1', info: { title: 'Lofi Beats (SC)', author: 'Chill', length: 180000, uri: 'https://sc/1', isSeekable: true, isStream: false, sourceName: 'soundcloud' } }] });
             const key = Object.keys(tracks).find(k => id.endsWith(':' + k));
             if (id.startsWith('https://list')) return json(s, { loadType: 'playlist', data: { info: { name: 'Mix' }, tracks: [tracks.lofi, tracks.rock] } });
@@ -142,4 +143,41 @@ test('Musik: YouTube verlangt Anmeldung → SoundCloud-Ersatz, Meldungen gebünd
         assert.strictEqual(texts().filter(t => /Übersprungen/.test(t)).length, 1, 'nur eine Einzelmeldung');
         await M.H.musik(it, {}, null, 'verlassen');
     } finally { M.stop(); L.close(); }
+});
+
+test('Musik: yt-dlp-Ausweichweg vor SoundCloud (nur YouTube-Adressen, Titel bleibt)', async () => {
+    const L = fakeLavalink(); await new Promise(r => L.srv.listen(0, '127.0.0.1', r));
+    const store = new Store(fs.mkdtempSync(path.join(os.tmpdir(), 'gn-mu3-')));
+    const sent = [], asked = []; let M;
+    const rest = async (m, route, body) => { sent.push([m, route, body]); return m === 'POST' ? { id: 'n' + sent.length } : null; };
+    M = music.create({ rest, log: () => {}, store, botId: () => '42', url: 'http://127.0.0.1:' + L.srv.address().port, password: 'pw',
+        ytdlp: async u => { asked.push(u); return { url: 'https://rr.googlevideo.test/audio?id=1', title: 'x', author: 'y', length: 1 }; },
+        voice: (gid, ch) => { if (ch) setTimeout(() => { M.onVoiceState({ guild_id: gid, user_id: '42', channel_id: ch, session_id: 's' }); M.onVoiceServer({ guild_id: gid, token: 't', endpoint: 'e' }); }, 5); } });
+    try {
+        M.connect(); await wait(() => M.health().online); assert.strictEqual(M.health().ytdlp, true);
+        M.onGuild({ id: 'G', voice_states: [{ user_id: '7', channel_id: 'V' }] });
+        const it = { guild_id: 'G', channel_id: 'T', member: { user: { id: '7' }, roles: [], permissions: '0' } };
+        await M.H.play(it, { suche: 'lofi' });
+        const patches = () => L.calls.filter(c => c[0] === 'PATCH' && c[1].startsWith('/v4/sessions/S1/players/G')).map(c => c[2]);
+        const fail = () => { L.push({ op: 'event', type: 'TrackExceptionEvent', guildId: 'G', exception: { message: 'This video requires login.' } }); L.push({ op: 'event', type: 'TrackEndEvent', guildId: 'G', reason: 'loadFailed' }); };
+        fail();
+        await wait(() => patches().some(p => p.track && p.track.encoded === 'YT1'));
+        assert.strictEqual(asked[0], 'https://yt/1'); assert.strictEqual(asked.length, 1);
+        assert.strictEqual(M.status('G').current.title, 'Lofi Beats', 'Titel aus YouTube bleibt');
+        fail();   // auch yt-dlp-Stream scheitert → SoundCloud
+        await wait(() => patches().some(p => p.track && p.track.encoded === 'SC1'));
+        assert.strictEqual(asked.length, 1, 'yt-dlp nicht nochmal');
+        await M.H.musik(it, {}, null, 'verlassen');
+    } finally { M.stop(); L.close(); }
+});
+
+test('Musik: yt-dlp-Aufruf (Attrappe statt echtem Programm)', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gn-ytd-')), bin = path.join(dir, 'yt-dlp');
+    fs.writeFileSync(bin, '#!/bin/sh\nfor a; do last=$a; done\necho "https://rr.example/a?$last"\necho "Titel"\necho "Kanal"\necho "212.5"\n', { mode: 0o755 });
+    const r = music.ytdlpResolver(bin, '');
+    const y = await r('https://www.youtube.com/watch?v=abc');
+    assert.strictEqual(y.title, 'Titel'); assert.strictEqual(y.length, 212500); assert.match(y.url, /^https:\/\/rr\.example\/a\?https:\/\/www\.youtube\.com/);
+    await assert.rejects(r('https://evil.example/x'), /Keine YouTube-Adresse/);
+    await assert.rejects(r('--exec=rm'), /Keine YouTube-Adresse/);
+    assert.strictEqual(music.ytdlpResolver('', ''), null);
 });
