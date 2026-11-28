@@ -33,7 +33,7 @@ test('Dashboard – Discord-Login (state), nur verwaltbare Server mit Bot, CSRF,
     try {
         // Startseite und Sicherheits-Header
         let r = await go('/'); assert.strictEqual(r.status, 200); assert.match(r.headers.get('content-security-policy'), /frame-ancestors 'none'/);
-        { const page = await r.text(); assert.match(page, /data-theme="warm"/, 'Theme Warm vorhanden'); assert.match(page, /id="themeBtn"/); }
+        { const page = await r.text(); assert.match(page, /data-theme=warm/, 'Theme Warm vorhanden'); assert.match(page, /id="themeBtn"/); }
         assert.strictEqual((await go('/api/me')).status, 401);
         // Login: Weiterleitung mit state; falscher state abgelehnt
         r = await go('/login'); assert.strictEqual(r.status, 302);
