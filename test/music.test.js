@@ -16,6 +16,7 @@ function fakeLavalink() {
         const u = new URL(q.url, 'http://x');
         if (u.pathname === '/v4/loadtracks') {
             const id = u.searchParams.get('identifier');
+            if (id.startsWith('scsearch:') && id.includes('Lofi Beats')) return json(s, { loadType: 'search', data: [{ encoded: 'SC1', info: { title: 'Lofi Beats (SC)', author: 'Chill', length: 180000, uri: 'https://sc/1', isSeekable: true, isStream: false, sourceName: 'soundcloud' } }] });
             const key = Object.keys(tracks).find(k => id.endsWith(':' + k));
             if (id.startsWith('https://list')) return json(s, { loadType: 'playlist', data: { info: { name: 'Mix' }, tracks: [tracks.lofi, tracks.rock] } });
             return json(s, key ? { loadType: 'search', data: [tracks[key]] } : { loadType: 'empty', data: {} });
@@ -112,5 +113,33 @@ test('Musik: Sprachkanal → Lavalink, Warteschlange, Titelwechsel, DJ-Rolle, Kn
         assert.deepStrictEqual(voiceCalls[voiceCalls.length - 1], ['G', null]);
         assert.ok(L.calls.some(c => c[0] === 'DELETE' && c[1] === '/v4/sessions/S1/players/G'));
         assert.strictEqual(M.status('G').current, null);
+    } finally { M.stop(); L.close(); }
+});
+
+test('Musik: YouTube verlangt Anmeldung → SoundCloud-Ersatz, Meldungen gebündelt', async () => {
+    const L = fakeLavalink(); await new Promise(r => L.srv.listen(0, '127.0.0.1', r));
+    const store = new Store(fs.mkdtempSync(path.join(os.tmpdir(), 'gn-mu2-')));
+    const sent = []; let M;
+    const rest = async (m, route, body) => { sent.push([m, route, body]); return m === 'POST' ? { id: 'n' + sent.length } : null; };
+    M = music.create({ rest, log: () => {}, store, botId: () => '42', url: 'http://127.0.0.1:' + L.srv.address().port, password: 'pw',
+        voice: (gid, ch) => { if (ch) setTimeout(() => { M.onVoiceState({ guild_id: gid, user_id: '42', channel_id: ch, session_id: 's' }); M.onVoiceServer({ guild_id: gid, token: 't', endpoint: 'e' }); }, 5); } });
+    try {
+        M.connect(); await wait(() => L.calls.some(c => c[0] === 'WS')); await wait(() => M.health().online);
+        M.onGuild({ id: 'G', voice_states: [{ user_id: '7', channel_id: 'V' }] });
+        const it = { guild_id: 'G', channel_id: 'T', member: { user: { id: '7' }, roles: [], permissions: '0' } };
+        await M.H.play(it, { suche: 'lofi' }); await M.H.play(it, { suche: 'rock' });
+        const patches = () => L.calls.filter(c => c[0] === 'PATCH' && c[1].startsWith('/v4/sessions/S1/players/G')).map(c => c[2]);
+        const texts = () => sent.filter(s => s[0] === 'POST' && s[1] === '/channels/T/messages').map(s => s[2].content || '').filter(Boolean);
+        const fail = () => { L.push({ op: 'event', type: 'TrackExceptionEvent', guildId: 'G', exception: { message: '(yts.version: 1.18.2) All clients failed to load the item.\nClient [ANDROID_VR] failed: This video requires login.\n    at dev.lavalink.Foo' } }); L.push({ op: 'event', type: 'TrackEndEvent', guildId: 'G', reason: 'loadFailed' }); };
+        fail();
+        await wait(() => patches().some(p => p.track && p.track.encoded === 'SC1'));
+        assert.ok(texts().some(t => /↪ YouTube verlangt eine Anmeldung.*SoundCloud/.test(t)), texts().join('|'));
+        assert.ok(!texts().some(t => /at dev\.lavalink/.test(t)), 'kein Stacktrace im Chat');
+        fail();   // auch der Ersatz scheitert → übersprungen, nächster Titel (Rock: kein SoundCloud-Treffer)
+        await wait(() => patches().some(p => p.track && p.track.encoded === 'E2'));
+        assert.ok(texts().some(t => /Übersprungen: \*\*Lofi Beats \(SC\)\*\*/.test(t)));
+        fail(); await wait(() => !M.status('G').current);
+        assert.strictEqual(texts().filter(t => /Übersprungen/.test(t)).length, 1, 'nur eine Einzelmeldung');
+        await M.H.musik(it, {}, null, 'verlassen');
     } finally { M.stop(); L.close(); }
 });

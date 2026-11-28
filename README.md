@@ -133,3 +133,8 @@ The image is Node.js 22, and no npm packages are installed. The console shows `W
   - *your Discord account is not a member* → check which Discord account is linked on the GhostNode website (Mein Bereich),
   - *no "Manage Server" right* → you need "Manage Server", "Administrator" or be the owner.
   After inviting the bot or changing roles, click **⟳ Server neu prüfen** – no new sign-in needed.
+
+### New in 2.5.1
+
+- Music: when YouTube refuses a track (“This video requires login”), the bot plays the same title from SoundCloud instead. Failures are reported once in short form (no stack traces), repeated failures are skipped silently, and after 8 failed tracks in a row the queue stops. Server admins can sign the music service into YouTube with `ghostnode musik-login` (root script).
+

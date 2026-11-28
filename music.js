@@ -98,7 +98,7 @@ function create(core) {
             return;
         }
         if (m.op === 'stats') { stats = { players: m.players, playing: m.playingPlayers, uptime: m.uptime, cpu: m.cpu && m.cpu.lavalinkLoad }; return; }
-        if (m.op === 'playerUpdate') { const s = S.get(m.guildId); if (s && m.state) { s.pos = m.state.position || 0; s.posAt = Date.now(); } return; }
+        if (m.op === 'playerUpdate') { const s = S.get(m.guildId); if (s && m.state) { s.pos = m.state.position || 0; s.posAt = Date.now(); if (s.pos > 3000) s.fails = s.skips = 0; } return; }
         if (m.op !== 'event') return;
         const s = S.get(m.guildId); if (!s) return;
         switch (m.type) {
@@ -106,13 +106,50 @@ function create(core) {
             case 'TrackEndEvent':
                 if (m.reason === 'replaced' || m.reason === 'cleanup') return;
                 if (m.reason === 'stopped' && !s.cur) return;
-                return next(s, m.reason === 'loadFailed');
-            case 'TrackExceptionEvent': log('Musik-Fehler', s.gid, m.exception && m.exception.message); if (s.text) send(s.text, { content: '⚠ Titel nicht abspielbar: ' + cut(m.exception && m.exception.message || '?', 200) }); return;
+                if (m.reason === 'loadFailed') return failed(s);
+                return next(s, false);
+            case 'TrackExceptionEvent': {
+                const msg = String(m.exception && m.exception.message || '?');
+                log('Musik-Fehler', s.gid, msg.split('\n')[0]);
+                s.fails = (s.fails || 0) + 1; s.lastErr = msg;
+                return;
+            }
             case 'TrackStuckEvent': return next(s, true);
             case 'WebSocketClosedEvent':
                 if ([4014, 4006, 4009].includes(m.code)) { log('Musik: Sprachverbindung getrennt (' + m.code + ')', s.gid); if (m.code === 4014) await cleanup(s, false); }
                 return;
         }
+    }
+    /** Titel ließ sich nicht abspielen: YouTube → gleicher Titel über SoundCloud; Meldungen gebündelt statt eine pro Titel */
+    const LOGIN = /requires login|sign in|confirm you.?re not a bot|login required/i;
+    function shortErr(e) {
+        const first = String(e || '?').split('\n').map(x => x.trim()).find(x => x && !/^at /.test(x)) || '?';
+        if (LOGIN.test(e || '')) return 'YouTube verlangt eine Anmeldung';
+        return cut(first.replace(/^\(yts\.version: [^)]*\)\s*/, ''), 160);
+    }
+    async function failed(s) {
+        const prev = s.cur, err = s.lastErr || ''; s.lastErr = '';
+        if (prev && !prev.alt && prev.src === 'youtube' && prev.title) {
+            const q = (prev.author && !/ - Topic$/.test(prev.author) ? prev.author + ' ' : prev.author ? prev.author.replace(/ - Topic$/, '') + ' ' : '') + prev.title;
+            const r = await ll('GET', '/loadtracks?identifier=' + encodeURIComponent('scsearch:' + cut(q, 150))).catch(() => null);
+            const t = r && r.loadType === 'search' && r.data && r.data[0];
+            if (t) {
+                const alt = { encoded: t.encoded, title: cut(t.info.title, 200), author: cut(t.info.author, 100), length: t.info.isStream ? 0 : t.info.length, uri: t.info.uri || '', art: t.info.artworkUrl || '', src: t.info.sourceName || 'soundcloud', seek: !!t.info.isSeekable, by: prev.by, alt: true };
+                s.queue.unshift(alt);
+                if (!s.altNote && s.text) { s.altNote = true; send(s.text, { content: '↪ ' + shortErr(err) + ' – ich spiele solche Titel ersatzweise über SoundCloud.' }); }
+                return next(s, true);
+            }
+        }
+        const n = s.skips = (s.skips || 0) + 1;
+        if (s.text) {
+            if (n <= 1) send(s.text, { content: '⚠ Übersprungen: **' + cut(prev ? prev.title : '?', 80) + '** – ' + shortErr(err) + '.' });
+            else if (n === 3) send(s.text, { content: '⚠ Mehrere Titel nicht abspielbar (' + shortErr(err) + '). Ich überspringe sie ab jetzt still.' + (LOGIN.test(err) ? '\nServer-Admin: `ghostnode musik-login` meldet den Musik-Dienst bei YouTube an.' : '') });
+        }
+        if (n >= 8) {
+            s.queue = []; s.fails = s.skips = 0;
+            if (s.text) send(s.text, { content: '⏹ 8 Titel hintereinander nicht abspielbar – Warteschlange gestoppt.' + (LOGIN.test(err) ? ' YouTube blockiert gerade (Anmeldung nötig).' : '') });
+        }
+        return next(s, true);
     }
     async function restore(s) {
         await player(s.gid, { voice: s.voice });
