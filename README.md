@@ -136,6 +136,10 @@ The image is Node.js 22, and no npm packages are installed. The console shows `W
   - *no "Manage Server" right* → you need "Manage Server", "Administrator" or be the owner.
   After inviting the bot or changing roles, click **⟳ Server neu prüfen** – no new sign-in needed.
 
+### New in 2.6.2
+- Dashboard follows Apple HIG principles: text at least 12 px, muted text at least 4.5:1, one system UI font stack plus one mono stack, hit targets of 28 px (44 px on touch), labelled icon-only buttons, keyboard-operable chips and server cards, visible focus ring, underlined links in running text, blur only on the header, and support for reduced motion / reduced transparency / more contrast / forced colors.
+- Optional **Warm** theme (switch in the dashboard header, remembered in the browser, applied before first paint); the dark GhostNode look stays the default.
+
 ### New in 2.6.1
 
 - Dashboard uses the full width; card grids stack without gaps (masonry).

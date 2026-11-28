@@ -3,46 +3,47 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>GhostNode Bot · Dashboard</title>
+<script>try{if(localStorage.getItem("gn-theme")==="warm")document.documentElement.setAttribute("data-theme","warm")}catch(e){}</script>
 <style>
-:root{--bg:#040609;--bg-rgb:4,6,9;--panel:rgba(10,16,24,.88);--panel2:rgba(18,28,42,.95);--line:rgba(56,213,230,.28);--cyan:#38d5e6;--gold:#f3c262;--text:#e2e8f0;--muted:#7d8ba0;--red:#ff5c6c;--green:#50fa7b;--purple:#bd93f9;--glow:rgba(56,213,230,.32);
+:root{--bg:#040609;--bg-rgb:4,6,9;--panel:rgba(10,16,24,.88);--panel2:rgba(18,28,42,.95);--line:rgba(var(--acc-rgb),.28);--cyan:#38d5e6;--gold:#f3c262;--text:#e2e8f0;--muted:#7d8ba0;--red:#ff5c6c;--green:#50fa7b;--purple:#bd93f9;--glow:rgba(var(--acc-rgb),.32);--acc-rgb:56,213,230;--gold-rgb:243,194,98;--red-rgb:255,92,108;--green-rgb:80,250,123;--acc:var(--cyan);--field:var(--line);--font:-apple-system,BlinkMacSystemFont,"Segoe UI Variable Text","Segoe UI",system-ui,Roboto,"Helvetica Neue",sans-serif;--font-head:var(--font);--mono:ui-monospace,"SF Mono","Cascadia Mono","Cascadia Code",Consolas,"Liberation Mono",monospace;--hit:28px;color-scheme:dark;
 --cut-sm:polygon(0 0,calc(100% - 8px) 0,100% 8px,100% 100%,0 100%);--cut-md:polygon(0 0,calc(100% - 14px) 0,100% 14px,100% 100%,0 100%)}
 *{box-sizing:border-box}
-body{margin:0;color:var(--text);font:15px/1.5 "Segoe UI",Roboto,-apple-system,system-ui,sans-serif;background-color:var(--bg);
-background-image:radial-gradient(circle at 50% 0,rgba(56,213,230,.09),transparent 60%),linear-gradient(rgba(56,213,230,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(56,213,230,.035) 1px,transparent 1px);background-size:auto,42px 42px,42px 42px;background-attachment:fixed;min-height:100vh}
-a{color:var(--cyan)}button,input,select,textarea{font:inherit;color:inherit}
-header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;padding:10px 20px;background:rgba(4,6,9,.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);box-shadow:0 1px 18px rgba(56,213,230,.08)}
-.brand{font-weight:800;letter-spacing:4px;font-size:1rem}.brand span{color:var(--cyan);text-shadow:0 0 10px var(--glow)}.brand b{color:var(--gold)}.brand small{color:var(--muted);letter-spacing:3px;font-size:.7rem;margin-left:6px}.sp{flex:1}
+body{margin:0;color:var(--text);font:15px/1.5 var(--font);-webkit-font-smoothing:antialiased;background-color:var(--bg);
+background-image:radial-gradient(circle at 50% 0,rgba(var(--acc-rgb),.09),transparent 60%),linear-gradient(rgba(var(--acc-rgb),.035) 1px,transparent 1px),linear-gradient(90deg,rgba(var(--acc-rgb),.035) 1px,transparent 1px);background-size:auto,42px 42px,42px 42px;background-attachment:fixed;min-height:100vh}
+a{color:var(--cyan)}h1,h2,h3{font-family:var(--font-head)}code,kbd,pre,samp{font-family:var(--mono);font-size:max(12px,.9em)}button,input,select,textarea{font:inherit;color:inherit}
+header{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:14px;padding:10px 20px;background:rgba(var(--bg-rgb),.88);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);box-shadow:0 1px 18px rgba(var(--acc-rgb),.08)}
+.brand{font-family:var(--font-head);font-weight:800;letter-spacing:4px;font-size:1rem}.brand span{color:var(--cyan);text-shadow:0 0 10px var(--glow)}.brand b{color:var(--gold)}.brand small{color:var(--muted);letter-spacing:3px;font-size:.75rem;margin-left:6px}.sp{flex:1}
 .user{display:flex;align-items:center;gap:8px;font-size:.85rem;letter-spacing:1px}.user img{width:28px;height:28px;border-radius:50%;box-shadow:0 0 0 1px var(--line)}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border:1px solid var(--cyan);background:rgba(56,213,230,.12);color:var(--cyan);cursor:pointer;text-decoration:none;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;font-size:.75rem;clip-path:var(--cut-sm);transition:all .18s}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:9px 16px;border:1px solid var(--cyan);background:rgba(var(--acc-rgb),.12);color:var(--cyan);cursor:pointer;text-decoration:none;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;font-size:.75rem;clip-path:var(--cut-sm);transition:all .18s}
 .btn:hover{background:var(--cyan);color:var(--bg);box-shadow:0 0 14px var(--cyan)}.btn:disabled{opacity:.5;cursor:wait}
-.btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(243,194,98,.12)}.btn.gold:hover{background:var(--gold);color:var(--bg);box-shadow:0 0 14px var(--gold)}
-.btn.red{border-color:var(--red);color:var(--red);background:rgba(255,92,108,.1)}.btn.red:hover{background:var(--red);color:var(--bg);box-shadow:0 0 14px var(--red)}
-.btn.sm{padding:5px 11px;font-size:.7rem}.btn.ic{padding:8px 12px;font-size:1rem;letter-spacing:0}.btn.on{background:var(--cyan);color:var(--bg)}
+.btn.gold{border-color:var(--gold);color:var(--gold);background:rgba(var(--gold-rgb),.12)}.btn.gold:hover{background:var(--gold);color:var(--bg);box-shadow:0 0 14px var(--gold)}
+.btn.red{border-color:var(--red);color:var(--red);background:rgba(var(--red-rgb),.1)}.btn.red:hover{background:var(--red);color:var(--bg);box-shadow:0 0 14px var(--red)}
+.btn.sm{padding:5px 11px;font-size:.75rem}.btn.ic{padding:8px 12px;font-size:1rem;letter-spacing:0}.btn.on{background:var(--cyan);color:var(--bg)}
 main{margin:0;padding:24px 20px 70px}
-.hero{text-align:center;padding:80px 10px}.hero h1{font-size:clamp(2rem,6vw,3.4rem);letter-spacing:8px;color:var(--gold);margin:.2em 0;text-shadow:0 0 24px rgba(243,194,98,.3)}
+.hero{text-align:center;padding:80px 10px}.hero h1{font-family:var(--font-head);font-size:clamp(2rem,6vw,3.4rem);letter-spacing:8px;color:var(--gold);margin:.2em 0;text-shadow:0 0 24px rgba(var(--gold-rgb),.3)}
 .hero p{color:var(--muted);max-width:640px;margin:0 auto 26px}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px}
-.gcard{display:flex;align-items:center;gap:12px;padding:14px;background:var(--panel);border:1px solid var(--line);cursor:pointer;clip-path:var(--cut-md);transition:all .18s}.gcard:hover{border-color:var(--cyan);box-shadow:inset 0 0 18px rgba(56,213,230,.12)}
+.gcard{display:flex;align-items:center;gap:12px;padding:14px;background:var(--panel);border:1px solid var(--line);cursor:pointer;clip-path:var(--cut-md);transition:all .18s}.gcard:hover{border-color:var(--cyan);box-shadow:inset 0 0 18px rgba(var(--acc-rgb),.12)}
 .gicon{width:46px;height:46px;background:var(--panel2);display:grid;place-items:center;font-weight:700;overflow:hidden;flex:none;clip-path:var(--cut-sm);color:var(--cyan)}.gicon img{width:100%;height:100%}
 .layout{display:grid;grid-template-columns:230px 1fr;gap:20px}
 nav.side{display:flex;flex-direction:column;gap:3px;position:sticky;top:72px;align-self:start;background:var(--panel);border:1px solid var(--line);padding:8px;clip-path:var(--cut-md)}
 nav.side button{text-align:left;padding:9px 12px;background:none;border:none;border-left:2px solid transparent;cursor:pointer;color:var(--muted);letter-spacing:.5px;transition:all .15s}
-nav.side button.on,nav.side button:hover{color:var(--cyan);border-left-color:var(--cyan);background:rgba(56,213,230,.07)}
-.card{background:var(--panel);border:1px solid var(--line);padding:20px;margin-bottom:16px;clip-path:var(--cut-md);backdrop-filter:blur(8px)}
-.card h2{margin:0 0 14px;font-size:.85rem;letter-spacing:2px;text-transform:uppercase;color:var(--cyan);font-weight:700;padding-bottom:8px;border-bottom:1px solid var(--line)}.card h2::before{content:"// ";opacity:.6}
-.card h3{margin:18px 0 6px;font-size:.78rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold)}.muted{color:var(--muted);font-size:.88rem}
-label.f{display:block;margin:10px 0}label.f>span{display:block;font-size:.7rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px}
-input[type=text],input[type=number],input[type=search],select,textarea{width:100%;padding:9px 12px;background:rgba(4,6,9,.95);border:1px solid var(--line);outline:none;transition:border-color .15s,box-shadow .15s}
+nav.side button.on,nav.side button:hover{color:var(--cyan);border-left-color:var(--cyan);background:rgba(var(--acc-rgb),.07)}
+.card{background:var(--panel);border:1px solid var(--line);padding:20px;margin-bottom:16px;clip-path:var(--cut-md)}
+.card h2{font-family:var(--font-head);margin:0 0 14px;font-size:.85rem;letter-spacing:2px;text-transform:uppercase;color:var(--cyan);font-weight:700;padding-bottom:8px;border-bottom:1px solid var(--line)}.card h2::before{content:"// ";opacity:.6}
+.card h3{font-family:var(--font-head);margin:18px 0 6px;font-size:.78rem;letter-spacing:1.5px;text-transform:uppercase;color:var(--gold)}.muted{color:var(--muted);font-size:.88rem}
+label.f{display:block;margin:10px 0}label.f>span{display:block;font-size:.75rem;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:1px}
+input[type=text],input[type=number],input[type=search],select,textarea{width:100%;min-height:var(--hit);padding:9px 12px;background:rgba(var(--bg-rgb),.95);border:1px solid var(--field);transition:border-color .15s,box-shadow .15s}
 input:focus,select:focus,textarea:focus{border-color:var(--cyan);box-shadow:0 0 10px var(--glow)}
 textarea{min-height:80px;resize:vertical}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.row>*{flex:1 1 180px}
 .sw{display:flex;align-items:center;gap:10px;margin:8px 0;cursor:pointer}.sw input{width:18px;height:18px;accent-color:var(--cyan)}
-.chips{display:flex;flex-wrap:wrap;gap:6px;max-height:220px;overflow:auto;padding:6px;border:1px solid var(--line);background:rgba(4,6,9,.9)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;max-height:220px;overflow:auto;padding:6px;border:1px solid var(--line);background:rgba(var(--bg-rgb),.9)}
 .chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border:1px solid var(--line);font-size:.82rem;cursor:pointer;user-select:none;clip-path:var(--cut-sm)}
-.chip.on{border-color:var(--cyan);background:rgba(56,213,230,.15);color:var(--cyan)}.dot{width:9px;height:9px;border-radius:50%}
+.chip.on{border-color:var(--cyan);background:rgba(var(--acc-rgb),.15);color:var(--cyan)}.dot{width:9px;height:9px;border-radius:50%}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
-.stat{background:var(--panel2);border:1px solid var(--line);padding:12px 14px;clip-path:var(--cut-sm)}.stat b{display:block;font-size:1.7rem;color:var(--gold);text-shadow:0 0 12px rgba(243,194,98,.25)}.stat span{font-size:.7rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
-table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{padding:8px;border-bottom:1px solid rgba(56,213,230,.12);text-align:left}th{color:var(--muted);font-weight:600;font-size:.7rem;text-transform:uppercase;letter-spacing:1px}tr:hover td{background:rgba(56,213,230,.03)}
+.stat{background:var(--panel2);border:1px solid var(--line);padding:12px 14px;clip-path:var(--cut-sm)}.stat b{font-family:var(--font-head);display:block;font-size:1.7rem;color:var(--gold);text-shadow:0 0 12px rgba(var(--gold-rgb),.25)}.stat span{font-size:.75rem;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{padding:8px;border-bottom:1px solid rgba(var(--acc-rgb),.12);text-align:left}th{color:var(--muted);font-weight:600;font-size:.75rem;text-transform:uppercase;letter-spacing:1px}tr:hover td{background:rgba(var(--acc-rgb),.03)}
 .save{position:sticky;bottom:12px;display:flex;justify-content:flex-end;margin-top:10px}
 /* Reiter-Inhalt: Karten nebeneinander, sobald Platz ist (Mauerwerk per Skript unten); Speichern-Leiste u. a. über die volle Breite */
 #pane{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(560px,100%),1fr));column-gap:16px;align-content:start;min-width:0}#pane>:not(.card){grid-column:1/-1}
@@ -53,16 +54,69 @@ table{width:100%;border-collapse:collapse;font-size:.9rem}td,th{padding:8px;bord
 .np{display:grid;grid-template-columns:150px 1fr;gap:18px;align-items:center}
 .np .art{width:150px;height:150px;background:var(--panel2) center/cover;clip-path:var(--cut-md);display:grid;place-items:center;font-size:3rem;border:1px solid var(--line)}
 .np .t{font-size:1.2rem;font-weight:700;line-height:1.3}.np .a{color:var(--muted);margin:2px 0 10px}
-.prog{height:6px;background:rgba(56,213,230,.12);position:relative;margin:10px 0 4px}.prog i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--cyan),var(--gold));box-shadow:0 0 10px var(--glow)}
+.prog{height:6px;background:rgba(var(--acc-rgb),.12);position:relative;margin:10px 0 4px}.prog i{position:absolute;left:0;top:0;bottom:0;background:linear-gradient(90deg,var(--cyan),var(--gold));box-shadow:0 0 10px var(--glow)}
 .ctl{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:12px}.ctl input[type=range]{flex:1 1 140px;accent-color:var(--cyan)}
 .eq{display:inline-flex;gap:2px;align-items:flex-end;height:14px;margin-right:6px}.eq i{width:3px;background:var(--cyan);animation:eq 1s infinite ease-in-out}.eq i:nth-child(2){animation-delay:.2s}.eq i:nth-child(3){animation-delay:.4s}
 @keyframes eq{0%,100%{height:3px}50%{height:14px}}.paused .eq i{animation:none;height:3px}
-.badge{display:inline-block;padding:1px 8px;font-size:.7rem;border:1px solid var(--line);letter-spacing:1px;text-transform:uppercase;color:var(--muted)}.badge.ok{color:var(--green);border-color:rgba(80,250,123,.4)}.badge.bad{color:var(--red);border-color:rgba(255,92,108,.4)}
+.badge{display:inline-block;padding:1px 8px;font-size:.75rem;border:1px solid var(--line);letter-spacing:1px;text-transform:uppercase;color:var(--muted)}.badge.ok{color:var(--green);border-color:rgba(var(--green-rgb),.4)}.badge.bad{color:var(--red);border-color:rgba(var(--red-rgb),.4)}
 @media(max-width:820px){.layout{grid-template-columns:1fr}nav.side{position:static;flex-direction:row;overflow:auto}nav.side button{white-space:nowrap;border-left:none;border-bottom:2px solid transparent}nav.side button.on{border-bottom-color:var(--cyan)}.np{grid-template-columns:1fr}.np .art{width:100%;height:180px}}
+
+/* ---------- Gestaltung nach Apple HIG (Grundsätze): Größen, Klickflächen, Fokus, Systemeinstellungen ---------- */
+.btn{min-height:var(--hit);justify-content:center}
+.btn.ic{min-width:var(--hit)}
+.chip{min-height:var(--hit);font-size:.85rem}
+nav.side button{min-height:var(--hit)}
+.gcard:focus-visible,.chip:focus-visible{outline-offset:-2px}
+:focus-visible{outline:2px solid var(--gold);outline-offset:2px}
+input[type=range]{min-height:var(--hit)}
+input[type=checkbox]{width:18px;height:18px;accent-color:var(--acc)}
+.np .t a{display:inline-flex;align-items:center;min-height:var(--hit);color:inherit;text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+:is(p,td,.muted,.hint,li)>a:not(.btn){text-decoration:underline;text-decoration-thickness:1px;text-underline-offset:3px}
+td:has(>a),td>a{overflow-wrap:anywhere}
+.row>*{min-width:0}
+input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:max(.9rem,14px)}
+.themebtn{flex:none}#who{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+#pane,.layout>*{min-width:0}
+.tw{overflow-x:auto;max-width:100%}
+@media(max-width:820px){main{padding:18px 16px 70px}header{padding:10px 16px;flex-wrap:wrap}nav.side{max-width:100%}nav.side button{flex:none}.card{padding:16px}.card table{display:block;overflow-x:auto;max-width:100%}.brand small{display:none}}
+@media(pointer:coarse){:root{--hit:44px}.chip,.sw{min-height:44px}.sw input,input[type=checkbox]{width:22px;height:22px}input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{font-size:16px}}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;scroll-behavior:auto!important}.eq i{height:8px}}
+@media(prefers-reduced-transparency:reduce){header{backdrop-filter:none;background:var(--bg)}}
+@media(prefers-contrast:more){:root{--line:rgba(var(--acc-rgb),.85);--muted:#c3cdda;--field:var(--acc)}.card,.stat,nav.side,.gcard,.chip{border-color:var(--acc)}a{text-decoration:underline}}
+@media(forced-colors:active){.btn,.card,.stat,nav.side,.gcard,.chip,.toast,input,select,textarea{border:1px solid CanvasText;clip-path:none;box-shadow:none}.btn:hover,.btn.on,.chip.on{outline:2px solid Highlight}.prog i{background:Highlight}.eq i,.dot{background:CanvasText;forced-color-adjust:none}:focus-visible{outline-color:Highlight}}
+/* ---------- Theme „Warm“ (optional; Standard bleibt das dunkle GhostNode-Design) ---------- */
+html[data-theme=warm]{--bg:#faf9f5;--bg-rgb:250,249,245;--panel:#e8e6dc;--panel2:#faf9f5;--line:#b0aea5;--field:#85837a;--text:#141413;--muted:#5a5953;
+--cyan:#9a4426;--gold:#285a88;--red:#b3261e;--green:#486528;--purple:#4b6a2c;--acc:#d97757;--acc-rgb:217,119,87;--gold-rgb:106,155,204;--red-rgb:179,38,30;--green-rgb:120,140,93;--glow:transparent;
+--font:Lora,Georgia,serif;--font-head:Poppins,Arial,sans-serif;color-scheme:light}
+html[data-theme=warm] body{background-image:none}
+html[data-theme=warm] header{background:rgba(250,249,245,.92);box-shadow:none}
+html[data-theme=warm] .brand span,html[data-theme=warm] .hero h1,html[data-theme=warm] .stat b{text-shadow:none}
+html[data-theme=warm] .btn{border-color:var(--cyan);background:rgba(217,119,87,.14)}
+html[data-theme=warm] .btn.gold{border-color:var(--gold);background:rgba(106,155,204,.18)}
+html[data-theme=warm] .btn.red{border-color:var(--red);background:rgba(179,38,30,.08)}
+html[data-theme=warm] .btn:hover,html[data-theme=warm] .btn.on{background:var(--cyan);color:#faf9f5;box-shadow:none}
+html[data-theme=warm] .btn.gold:hover{background:var(--gold);color:#faf9f5;box-shadow:none}
+html[data-theme=warm] .btn.red:hover{background:var(--red);color:#faf9f5;box-shadow:none}
+html[data-theme=warm] .chip.on{background:rgba(217,119,87,.2);border-color:var(--acc);color:#7a3319}
+html[data-theme=warm] nav.side button.on,html[data-theme=warm] nav.side button:hover{border-left-color:var(--acc);background:rgba(217,119,87,.14);color:#7a3319}
+html[data-theme=warm] .prog i{background:linear-gradient(90deg,#d97757,#6a9bcc);box-shadow:none}
+html[data-theme=warm] .prog{background:rgba(20,20,19,.12)}
+html[data-theme=warm] .eq i{background:var(--acc)}
+html[data-theme=warm] input:focus,html[data-theme=warm] select:focus,html[data-theme=warm] textarea:focus{border-color:var(--cyan);box-shadow:none}
+html[data-theme=warm] input,html[data-theme=warm] select,html[data-theme=warm] textarea{background:#faf9f5}
+html[data-theme=warm] ::selection{background:rgba(217,119,87,.35)}
+html[data-theme=warm] :focus-visible{outline-color:#285a88}
+html[data-theme=warm] .gicon{color:var(--cyan)}
+html[data-theme=warm] .badge.ok{border-color:rgba(72,101,40,.6)}html[data-theme=warm] .badge.bad{border-color:rgba(179,38,30,.6)}
+html[data-theme=warm] .toast{box-shadow:0 4px 18px rgba(20,20,19,.2)}
+html[data-theme=warm] tr:hover td{background:rgba(20,20,19,.04)}
+html[data-theme=warm] td,html[data-theme=warm] th{border-bottom-color:rgba(20,20,19,.14)}
+@media(prefers-contrast:more){html[data-theme=warm]{--line:#141413;--muted:#3b3a37;--field:#141413}html[data-theme=warm] .card,html[data-theme=warm] .stat,html[data-theme=warm] nav.side,html[data-theme=warm] .gcard,html[data-theme=warm] .chip{border-color:#141413}}
+@media(prefers-reduced-transparency:reduce){html[data-theme=warm] header{background:#faf9f5}}
 </style>
 </head>
 <body>
-<header><div class="brand"><span>◈</span> GHOST<b>NODE</b><small>BOT · DASHBOARD</small></div><div class="sp"></div><div id="who"></div></header>
+<header><div class="brand"><span>◈</span> GHOST<b>NODE</b><small>BOT · DASHBOARD</small></div><div class="sp"></div><button type="button" class="btn sm themebtn" id="themeBtn" aria-pressed="false" title="Design wechseln: Standard oder Warm">Design: Standard</button><div id="who"></div></header>
 <main id="app"><p class="muted">Lade …</p></main>
 <script>
 (() => {
@@ -74,8 +128,8 @@ const api = (path, data) => fetch('/api' + path, data === undefined ? { credenti
     .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok) throw Object.assign(new Error(j.error || 'Fehler ' + r.status), { status: r.status, login: j.login, via: j.via }); return j; });
 const icon = g => g.icon ? '<img src="https://cdn.discordapp.com/icons/' + esc(g.id) + '/' + esc(g.icon) + '.png?size=96" alt="">' : esc((g.name || '?').split(/\s+/).map(w => w[0]).join('').slice(0, 3));
 const chSel = (k, v, none = '— aus —') => '<select data-k="' + k + '"><option value="">' + none + '</option>' + G.channels.map(c => '<option value="' + c.id + '"' + (c.id === v ? ' selected' : '') + '># ' + esc(c.name) + '</option>').join('') + '</select>';
-const roleChips = (k, list) => '<div class="chips" data-roles="' + k + '">' + G.roles.map(r => '<span class="chip' + (list.includes(r.id) ? ' on' : '') + '" data-id="' + r.id + '"><i class="dot" style="background:' + (r.color ? '#' + r.color.toString(16).padStart(6, '0') : '#8a97aa') + '"></i>' + esc(r.name) + '</span>').join('') + '</div>';
-const chChips = (k, list) => '<div class="chips" data-chans="' + k + '">' + G.channels.map(c => '<span class="chip' + (list.includes(c.id) ? ' on' : '') + '" data-id="' + c.id + '"># ' + esc(c.name) + '</span>').join('') + '</div>';
+const roleChips = (k, list) => '<div class="chips" data-roles="' + k + '">' + G.roles.map(r => '<span role="button" tabindex="0" aria-pressed="' + list.includes(r.id) + '" class="chip' + (list.includes(r.id) ? ' on' : '') + '" data-id="' + r.id + '"><i class="dot" style="background:' + (r.color ? '#' + r.color.toString(16).padStart(6, '0') : '#8a97aa') + '"></i>' + esc(r.name) + '</span>').join('') + '</div>';
+const chChips = (k, list) => '<div class="chips" data-chans="' + k + '">' + G.channels.map(c => '<span role="button" tabindex="0" aria-pressed="' + list.includes(c.id) + '" class="chip' + (list.includes(c.id) ? ' on' : '') + '" data-id="' + c.id + '"># ' + esc(c.name) + '</span>').join('') + '</div>';
 const sw = (k, on, label) => '<label class="sw"><input type="checkbox" data-k="' + k + '"' + (on ? ' checked' : '') + '> ' + label + '</label>';
 const roleName = id => (G.roles.find(r => r.id === id) || { name: 'unbekannte Rolle' }).name;
 const saveBtn = '<div class="save"><button class="btn gold" data-save>💾 Speichern</button></div>';
@@ -96,7 +150,7 @@ function pick() {
     gid = ''; G = null; location.hash = '';
     const on = me.guilds.filter(g => g.bot), off = me.guilds.filter(g => !g.bot);
     app.innerHTML = '<h2>Wähle einen Server</h2><p class="muted">Du siehst Server, auf denen du „Server verwalten“ darfst.</p><div class="grid">'
-        + on.map(g => '<div class="gcard" data-g="' + g.id + '"><div class="gicon">' + icon(g) + '</div><div><b>' + esc(g.name) + '</b><div class="muted">Einstellungen öffnen →</div></div></div>').join('') + '</div>'
+        + on.map(g => '<div class="gcard" role="button" tabindex="0" data-g="' + g.id + '"><div class="gicon">' + icon(g) + '</div><div><b>' + esc(g.name) + '</b><div class="muted">Einstellungen öffnen →</div></div></div>').join('') + '</div>'
         + (off.length ? '<h3 style="margin-top:28px">Ohne GhostNode Bot</h3><div class="grid">' + off.map(g => '<a class="gcard" style="text-decoration:none;color:inherit" target="_blank" rel="noopener" href="' + esc(me.invite) + '&guild_id=' + g.id + '"><div class="gicon">' + icon(g) + '</div><div><b>' + esc(g.name) + '</b><div class="muted">Bot einladen ↗</div></div></a>').join('') + '</div>' : '')
         + (!me.guilds.length ? emptyHelp() : '<p style="margin-top:18px"><button class="btn sm" id="refreshG">⟳ Server neu prüfen</button></p>');
     const rb = document.getElementById('refreshG');
@@ -160,7 +214,7 @@ function pane() {
             + '<div class="card"><h2>🎫 Tickets</h2><label class="f"><span>Ticket-Kanal (Threads entstehen dort)</span>' + chSel('ticket_channel', c.ticket_channel) + '</label><h3>Team-Rollen (sehen und schließen Tickets)</h3>' + roleChips('ticket_roles', c.ticket_roles)
             + '<p class="hint">Den Knopf „Ticket öffnen“ setzt du mit <b>/ticket-panel</b> in den gewünschten Kanal.</p></div>' + saveBtn;
         case 'cmds': return '<div class="card"><h2>💬 Eigene Befehle</h2><p class="muted">Im Chat mit <b>!name</b> aufrufen. Platzhalter: {user}, {name}, {server}</p><table>'
-            + Object.entries(G.cmds).sort().map(([n, t]) => '<tr><td><b>!' + esc(n) + '</b></td><td>' + esc(t) + '</td><td style="white-space:nowrap"><button class="btn sm" data-editcmd="' + esc(n) + '">✎</button> <button class="btn sm red" data-delcmd="' + esc(n) + '">🗑</button></td></tr>').join('')
+            + Object.entries(G.cmds).sort().map(([n, t]) => '<tr><td><b>!' + esc(n) + '</b></td><td>' + esc(t) + '</td><td style="white-space:nowrap"><button class="btn sm" data-editcmd="' + esc(n) + '" title="Bearbeiten" aria-label="Befehl !' + esc(n) + ' bearbeiten">✎</button> <button class="btn sm red" data-delcmd="' + esc(n) + '" title="Löschen" aria-label="Befehl !' + esc(n) + ' löschen">🗑</button></td></tr>').join('')
             + '</table><h3>Neu / ändern</h3><div class="row"><label class="f" style="flex:0 1 200px"><span>Name</span><input type="text" id="cmdName" maxlength="30" placeholder="regeln"></label><label class="f"><span>Antwort</span><input type="text" id="cmdText" maxlength="1800" placeholder="Bitte lies #regeln, {user}!"></label></div><button class="btn gold" data-addcmd>Speichern</button></div>';
         case 'events': return '<div class="card"><h2>🎁 Laufende Giveaways</h2>' + (G.giveaways.length ? '<table><tr><th>Preis</th><th>Endet</th><th>Teilnehmende</th><th>Gewinner</th></tr>' + G.giveaways.map(w => '<tr><td>' + esc(w.prize) + '</td><td>' + esc(new Date(w.end).toLocaleString('de-DE')) + '</td><td>' + w.entrants + '</td><td>' + w.winners + '</td></tr>').join('') + '</table>' : '<p class="muted">Keine. Starten mit <b>/giveaway</b>.</p>')
             + '</div><div class="card"><h2>📊 Umfragen</h2>' + (G.polls.length ? '<table>' + G.polls.map(p => '<tr><td>' + esc(p.q) + '</td><td>' + p.votes + ' Stimmen</td></tr>').join('') + '</table>' : '<p class="muted">Keine. Starten mit <b>/umfrage</b>.</p>') + '</div>'
@@ -177,7 +231,7 @@ function musicPane() {
     const m = G.music;
     if (!m || !m.enabled) return '<div class="card"><h2>🎵 Musik</h2><p>Musik ist auf diesem Bot noch <b>nicht eingerichtet</b>.</p><p class="muted">Discord verlangt in Sprachkanälen Ende-zu-Ende-Verschlüsselung (DAVE). Der Bot spielt deshalb über einen eigenen Musik-Dienst (Lavalink) auf dem Server. Der Server-Betreiber richtet ihn mit <code>bash ghostnode-root.sh bot</code> ein – danach ist hier alles aktiv.</p></div>';
     return '<div id="musicLive">' + musicLive(m) + '</div>'
-        + '<div class="card"><h2>▶ Abspielen</h2><div class="row"><input type="search" id="muQ" placeholder="Titel, Künstler oder Link (YouTube, SoundCloud, Bandcamp, Twitch, Radio-Stream …)" maxlength="300" style="flex:4 1 280px"><button class="btn gold" data-muplay style="flex:0 0 auto">▶ Abspielen</button></div>'
+        + '<div class="card"><h2>▶ Abspielen</h2><div class="row"><input type="search" id="muQ" aria-label="Titel, Künstler oder Link" placeholder="Titel, Künstler oder Link (YouTube, SoundCloud, Bandcamp, Twitch, Radio-Stream …)" maxlength="300" style="flex:4 1 280px"><button class="btn gold" data-muplay style="flex:0 0 auto">▶ Abspielen</button></div>'
         + '<p class="hint">Du musst in Discord in einem Sprachkanal dieses Servers sein – der Bot kommt dann zu dir. In Discord geht es mit <b>/play</b> und <b>/musik …</b>.</p></div>'
         + '<div class="card"><h2>⚙ Einstellungen</h2><div class="row"><label class="f"><span>DJ-Rolle (leer = alle dürfen steuern)</span>' + roleSel('muDj', m.settings.dj) + '</label>'
         + '<label class="f"><span>Nur in diesem Textkanal</span>' + chSelId('muCh', m.settings.channel, G.channels, '# ', '— überall —') + '</label>'
@@ -196,14 +250,14 @@ function musicLive(m) {
             + '<div class="t"><span class="eq"><i></i><i></i><i></i></span>' + (c.uri ? '<a href="' + esc(c.uri) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">' + esc(c.title) + '</a>' : esc(c.title)) + '</div>'
             + '<div class="a">' + esc(c.author) + ' · gewünscht von ' + esc(c.by) + '</div>'
             + '<div class="prog"><i style="width:' + pct.toFixed(1) + '%"></i></div><div class="hint">' + fmt(c.position) + ' / ' + fmt(c.length) + ' · ' + m.listeners + ' hören zu · ' + st + '</div>'
-            + '<div class="ctl"><button class="btn ic" data-mu="pause" title="Pause/Weiter">' + (m.paused ? '▶' : '⏸') + '</button><button class="btn ic" data-mu="skip" title="Überspringen">⏭</button><button class="btn ic red" data-mu="stop" title="Stopp">⏹</button>'
-            + '<button class="btn ic' + (m.loop !== 'off' ? ' on' : '') + '" data-mu="loop" title="Wiederholen">' + (m.loop === 'track' ? '🔂' : '🔁') + '</button><button class="btn ic" data-mu="shuffle" title="Mischen">🔀</button>'
-            + '<span title="Lautstärke">🔊</span><input type="range" min="1" max="150" value="' + m.volume + '" data-muvol><span class="hint" style="flex:0 0 auto">' + m.volume + ' %</span>'
-            + '<select data-mufx style="flex:0 1 150px">' + Object.entries(m.effects).map(([k, l]) => '<option value="' + k + '"' + (k === m.effect ? ' selected' : '') + '>✨ ' + esc(l) + '</option>').join('') + '</select>'
+            + '<div class="ctl"><button class="btn ic" data-mu="pause" title="Pause/Weiter" aria-label="Pause oder Weiter">' + (m.paused ? '▶' : '⏸') + '</button><button class="btn ic" data-mu="skip" title="Überspringen" aria-label="Überspringen">⏭</button><button class="btn ic red" data-mu="stop" title="Stopp" aria-label="Stopp">⏹</button>'
+            + '<button class="btn ic' + (m.loop !== 'off' ? ' on' : '') + '" data-mu="loop" title="Wiederholen" aria-label="Wiederholen">' + (m.loop === 'track' ? '🔂' : '🔁') + '</button><button class="btn ic" data-mu="shuffle" title="Mischen" aria-label="Mischen">🔀</button>'
+            + '<span title="Lautstärke" aria-hidden="true">🔊</span><input type="range" aria-label="Lautstärke" min="1" max="150" value="' + m.volume + '" data-muvol><span class="hint" style="flex:0 0 auto">' + m.volume + ' %</span>'
+            + '<select data-mufx aria-label="Klangeffekt" style="flex:0 1 150px">' + Object.entries(m.effects).map(([k, l]) => '<option value="' + k + '"' + (k === m.effect ? ' selected' : '') + '>✨ ' + esc(l) + '</option>').join('') + '</select>'
             + '<button class="btn sm" data-mu="leave">Kanal verlassen</button></div></div></div>';
     }
     h += '</div><div class="card"><h2>📜 Warteschlange · ' + m.total + ' Titel</h2>' + (m.queue.length ? '<table><tr><th>#</th><th>Titel</th><th>Länge</th><th></th></tr>' + m.queue.map((t, i) => '<tr><td>' + (i + 1) + '</td><td>' + (t.uri ? '<a href="' + esc(t.uri) + '" target="_blank" rel="noopener">' + esc(t.title) + '</a>' : esc(t.title)) + '<div class="hint">' + esc(t.author) + '</div></td><td>' + fmt(t.length) + '</td><td style="white-space:nowrap">'
-        + (i ? '<button class="btn sm" data-mu="move" data-arg="' + (i + 1) + ',' + i + '" title="Nach oben">▲</button> ' : '') + '<button class="btn sm red" data-mu="remove" data-arg="' + (i + 1) + '" title="Entfernen">✕</button></td></tr>').join('') + '</table>'
+        + (i ? '<button class="btn sm" data-mu="move" data-arg="' + (i + 1) + ',' + i + '" title="Nach oben" aria-label="Nach oben">▲</button> ' : '') + '<button class="btn sm red" data-mu="remove" data-arg="' + (i + 1) + '" title="Entfernen" aria-label="Entfernen">✕</button></td></tr>').join('') + '</table>'
         + (m.total > m.queue.length ? '<p class="hint">… und ' + (m.total - m.queue.length) + ' weitere</p>' : '') + '<p style="margin-top:10px"><button class="btn sm red" data-mu="clear">Warteschlange leeren</button></p>' : '<p class="muted">Leer – füge unten etwas hinzu.</p>') + '</div>';
     return h;
 }
@@ -265,7 +319,7 @@ document.addEventListener('click', e => {
         .then(r => { G.music = r.music; toast('✅ Gespeichert'); }).catch(er => toast('⚠ ' + er.message, true));
     if (q('[data-xsave]')) return api('/guild/' + gid + '/extras', { suggest: $('#xSug').value, star: $('#xStar').value, starMin: Number($('#xStarMin').value), starEmoji: $('#xStarEmoji').value, tempHub: $('#xHub').value, tempName: $('#xTempName').value, tempLimit: Number($('#xTempLimit').value) })
         .then(r => { G.extras = r.extras; toast('✅ Gespeichert'); }).catch(er => toast('⚠ ' + er.message, true));
-    if (q('.chip')) return q('.chip').classList.toggle('on');
+    if (q('.chip')) { const c = q('.chip'); return c.setAttribute('aria-pressed', c.classList.toggle('on')); }
     if (q('[data-save]')) { const b = q('[data-save]'); b.disabled = true; return api('/guild/' + gid + '/cfg', collect()).then(r => { G.cfg = r.cfg; toast('✅ Gespeichert'); }).catch(er => toast('⚠ ' + er.message, true)).finally(() => { b.disabled = false; }); }
     if (q('[data-addrw]')) { if (!G.roles.length) return toast('Keine Rollen vorhanden', true); return $('#rw').insertAdjacentHTML('beforeend', rwRow('', G.roles[0].id)); }
     if (q('[data-delrw]')) return q('[data-rw]').remove();
@@ -282,7 +336,17 @@ document.addEventListener('change', e => {
     if (t.matches('[data-muvol]')) return muDo('volume', Number(t.value));
     if (t.matches('[data-mufx]')) return muDo('effect', t.value);
 });
-document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'muQ') { const b = $('[data-muplay]'); if (b) b.click(); } });
+document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.id === 'muQ') { const b = $('[data-muplay]'); if (b) b.click(); }
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches && e.target.matches('span[role=button][tabindex],div[role=button][tabindex]')) { e.preventDefault(); e.target.click(); }   // Tastatur: Chips und Server-Karten
+});
+/* Design „Warm“: Schalter in der Kopfzeile, Wahl im Browser gespeichert (data-theme steht schon vor dem ersten Zeichnen im <head>) */
+(() => {
+    const b = $('#themeBtn'), root = document.documentElement;
+    const show = () => { const w = root.getAttribute('data-theme') === 'warm'; b.textContent = 'Design: ' + (w ? 'Warm' : 'Standard'); b.setAttribute('aria-pressed', String(w)); };
+    b.onclick = () => { const w = root.getAttribute('data-theme') !== 'warm'; if (w) root.setAttribute('data-theme', 'warm'); else root.removeAttribute('data-theme'); try { localStorage.setItem('gn-theme', w ? 'warm' : 'default'); } catch (e) { /* ohne Speicher: gilt nur bis zum Neuladen */ } show(); };
+    show();
+})();
 window.addEventListener('hashchange', () => { const h = location.hash.slice(1).split('/'); if (h[0] && h[0] !== gid && me) openGuild(h[0], h[1]); });
 boot();
 })();

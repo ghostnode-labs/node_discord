@@ -1,6 +1,6 @@
 {
   "name": "ghostnode-discord-bot",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "private": true,
   "description": "GhostNode community Discord bot – levels, moderation, AutoMod, roles, polls, giveaways, tickets; no dependencies",
   "main": "bot.js",
